@@ -8,6 +8,7 @@ using probabilistic data structures and algorithms.
 __version__ = "0.1.0"
 
 # Import main classes to make them available at the top level
+from tiny_sift.algorithms.countmin import CountMinSketch
 from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
 from tiny_sift.core.base import (
     CardinalityEstimator,
@@ -27,4 +28,5 @@ __all__ = [
     # Algorithm implementations
     "ReservoirSampling",
     "WeightedReservoirSampling",
+    "CountMinSketch",
 ]
