@@ -37,6 +37,27 @@ from tiny_sift.core.hash import murmurhash3_32
 T = TypeVar("T")  # Type for the items being processed
 
 
+def _count_leading_zeros(x: int, bits: int = 32) -> int:
+    """
+    Count the number of leading zeros in the binary representation of x.
+
+    Args:
+        x: The integer to analyze
+        bits: The total number of bits to consider (default: 32 for 32-bit integers)
+
+    Returns:
+        The number of leading zeros
+    """
+    if x == 0:
+        return bits
+
+    # Find the position of the highest bit set to 1 (1-indexed)
+    position = x.bit_length()
+
+    # Calculate leading zeros (bits - position)
+    return bits - position
+
+
 class HyperLogLog(CardinalityEstimator[T]):
     """
     HyperLogLog for cardinality estimation in data streams.
@@ -69,8 +90,7 @@ class HyperLogLog(CardinalityEstimator[T]):
     _ALPHA.extend([0.7213 / (1.0 + 1.079 / m) for m in [2**p for p in range(8, 64)]])
 
     # Constants for various bias correction thresholds
-    _THRESHOLD_SMALL = 5  # For small cardinality correction
-    _THRESHOLD_LINEAR_COUNTING = 2.5  # For linear counting switch
+    _THRESHOLD_SMALL = 2.5  # For small cardinality correction
 
     def __init__(
         self,
@@ -126,7 +146,7 @@ class HyperLogLog(CardinalityEstimator[T]):
         This method:
         1. Hashes the item to get a 32-bit value
         2. Uses the first 'p' bits to determine which register to update
-        3. Counts the number of leading zeros in the remaining bits
+        3. Counts the number of leading zeros in the remaining bits + 1
         4. Updates the register with the maximum value observed
 
         Args:
@@ -142,35 +162,20 @@ class HyperLogLog(CardinalityEstimator[T]):
         hash_value = murmurhash3_32(item, seed=self._seed)
 
         # Extract the register index from the first 'p' bits of the hash
-        # We can use bitwise AND with the precalculated mask for this
         register_index = hash_value & self._index_mask
 
-        # Calculate the pattern (number of leading zeros + 1) in the remaining bits
-        # First, we shift right by 'p' bits to remove the bits used for the index
-        remaining_bits = hash_value >> self._precision
+        # Get the remaining bits by shifting right by 'p' bits
+        remaining_hash = hash_value >> self._precision
 
-        # Count the number of leading zeros + 1
-        # We add 1 because we're counting the position of the first 1-bit
-        # If no 1-bit is found, Python would return 32, but we'll see a max of 32-p leading zeros
-        # in the remaining bits after removing the first p bits
-        pattern = 1
-        # Start with the highest bit position in the remaining bits (31-p)
-        # and go down until we find a 1
-        for bit_pos in range(31 - self._precision, -1, -1):
-            if (remaining_bits >> bit_pos) & 1:
-                # Found the first 1-bit, the pattern is position + 1
-                pattern = bit_pos + 1
-                break
-            # If we've checked all bits and found none, pattern will remain 1
+        # Count leading zeros in the remaining bits
+        leading_zeros = _count_leading_zeros(remaining_hash, 32 - self._precision)
 
-        # Alternative implementation using the position of the highest bit set:
-        # pattern = 1
-        # if remaining_bits != 0:
-        #     pattern = 1 + (remaining_bits.bit_length() - 1)
+        # The rank is the position of the first 1-bit, so it's leading_zeros + 1
+        rank = leading_zeros + 1
 
-        # Update the register if the new pattern is larger than the current value
-        if pattern > self._registers[register_index]:
-            self._registers[register_index] = pattern
+        # Update the register if the new rank is larger than the current value
+        if rank > self._registers[register_index]:
+            self._registers[register_index] = rank
 
     def query(self, *args: Any, **kwargs: Any) -> int:
         """
@@ -190,7 +195,6 @@ class HyperLogLog(CardinalityEstimator[T]):
         This method implements the full HyperLogLog algorithm with various corrections:
         1. Basic HyperLogLog formula for normal range
         2. Linear Counting for small cardinalities
-        3. Large range correction for very large cardinalities
 
         Returns:
             The estimated number of unique items in the stream.
@@ -200,49 +204,28 @@ class HyperLogLog(CardinalityEstimator[T]):
             return 0
 
         # Compute the "raw" estimate using the HyperLogLog algorithm
-        # First, calculate the harmonic mean of the register values
-        # transformed by 2^(-register_value)
+        # We use the harmonic mean of 2^(-register_value)
         sum_of_inverses = 0.0
-        num_zero_registers = 0
+        zero_registers = 0
 
         # Process each register
         for register_value in self._registers:
-            # 2^(-register_value)
-            sum_of_inverses += 2.0**-register_value
-            # Count zero registers for linear counting if needed
+            sum_of_inverses += math.pow(2.0, -register_value)
             if register_value == 0:
-                num_zero_registers += 1
+                zero_registers += 1
 
-        # The raw estimate formula is:
-        # E = alpha_m * m^2 * (sum(2^(-M[j])))^(-1)
-        # where alpha_m is a constant, m is the number of registers,
-        # and M[j] is the value of register j
-        raw_estimate = self._alpha * (self._m**2) * (1.0 / sum_of_inverses)
+        # Calculate the raw estimate: alpha * m^2 / sum(2^(-M[j]))
+        raw_estimate = self._alpha * (self._m**2) / sum_of_inverses
 
-        # Apply corrections based on the estimate range
-        # These corrections improve accuracy for small and large cardinalities
+        # Apply small range correction if necessary
+        # If there are empty registers, use linear counting
+        if raw_estimate <= self._THRESHOLD_SMALL * self._m and zero_registers > 0:
+            # Linear counting formula: m * ln(m / V)
+            # where m is the number of registers and V is the number of empty registers
+            return int(round(self._m * math.log(self._m / zero_registers)))
 
-        # Small range correction using Linear Counting
-        # If the estimate is small or many registers are still empty,
-        # use linear counting for better accuracy
-        if (
-            raw_estimate <= self._m * self._THRESHOLD_LINEAR_COUNTING
-            and num_zero_registers > 0
-        ):
-            # Linear Counting formula: m * ln(m / V)
-            # where m is the number of registers and V is the number of zero registers
-            return int(round(self._m * math.log(self._m / num_zero_registers)))
-
-        # Large range correction (not typically needed with 32-bit hashes)
-        # Only apply for very large streams approaching 2^32 unique values
-        # This is the "large range correction" from the HyperLogLog paper
-        elif raw_estimate > 2**32 / 30.0:
-            # The correction for large cardinalities prevents overflow
-            return int(round(-(2**32) * math.log(1.0 - raw_estimate / 2**32)))
-
-        # Normal range: use the raw estimate directly
-        else:
-            return int(round(raw_estimate))
+        # No correction needed, return the raw estimate
+        return int(round(raw_estimate))
 
     def merge(self, other: "HyperLogLog[T]") -> "HyperLogLog[T]":
         """
