@@ -9,4 +9,5 @@ __all__ = [
     "ReservoirSampling",
     "WeightedReservoirSampling",
     "CountMinSketch",
+    "HyperLogLog",
 ]
