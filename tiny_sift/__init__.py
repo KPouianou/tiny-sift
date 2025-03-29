@@ -24,7 +24,6 @@ __all__ = [
     "FrequencyEstimator",
     "CardinalityEstimator",
     "WindowAggregator",
-    
     # Algorithm implementations
     "ReservoirSampling",
     "WeightedReservoirSampling",
