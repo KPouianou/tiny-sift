@@ -5,6 +5,7 @@ This module provides efficient hash implementations that require no external dep
 These functions are optimized for performance and distribution quality, not cryptographic security.
 """
 
+import struct
 from typing import Any, Union
 
 
@@ -39,44 +40,44 @@ def murmurhash3_32(key: Any, seed: int = 0) -> int:
     c2 = 0x1B873593
 
     # Initialize hash with seed
-    h = seed
+    h = seed & 0xFFFFFFFF
 
     # Process 4 bytes at a time
     nblocks = length // 4
-    for i in range(nblocks):
-        # Extract 4-byte block and convert to integer
-        k = (
-            key_bytes[i * 4]
-            | (key_bytes[i * 4 + 1] << 8)
-            | (key_bytes[i * 4 + 2] << 16)
-            | (key_bytes[i * 4 + 3] << 24)
-        )
 
-        # MurmurHash3 block mixing function
+    # Use struct.unpack for consistent handling of byte order
+    for i in range(nblocks):
+        (k,) = struct.unpack("<I", key_bytes[i * 4 : i * 4 + 4])
+
         k = (k * c1) & 0xFFFFFFFF
         k = ((k << 15) | (k >> 17)) & 0xFFFFFFFF  # rotl32(k, 15)
         k = (k * c2) & 0xFFFFFFFF
 
-        # Update hash
         h ^= k
         h = ((h << 13) | (h >> 19)) & 0xFFFFFFFF  # rotl32(h, 13)
         h = (h * 5 + 0xE6546B64) & 0xFFFFFFFF
 
     # Handle remaining bytes (tail)
     k = 0
-    idx = nblocks * 4
+    tail_index = nblocks * 4
+    remaining = length & 3  # equivalent to length % 4
 
-    # Process remaining bytes based on how many are left (0-3)
-    if length & 3 >= 3:
-        k ^= key_bytes[idx + 2] << 16
-    if length & 3 >= 2:
-        k ^= key_bytes[idx + 1] << 8
-    if length & 3 >= 1:
-        k ^= key_bytes[idx]
-        k = (k * c1) & 0xFFFFFFFF
-        k = ((k << 15) | (k >> 17)) & 0xFFFFFFFF  # rotl32(k, 15)
-        k = (k * c2) & 0xFFFFFFFF
-        h ^= k
+    # Process remaining bytes in little-endian order
+    # This is a critical part where many implementations differ
+    if remaining > 0:
+        # Using a different approach for the tail bytes based on reference implementation
+        if remaining == 3:
+            k ^= key_bytes[tail_index + 2] << 16
+        if remaining >= 2:
+            k ^= key_bytes[tail_index + 1] << 8
+        if remaining >= 1:
+            k ^= key_bytes[tail_index]
+
+            k = (k * c1) & 0xFFFFFFFF
+            k = ((k << 15) | (k >> 17)) & 0xFFFFFFFF  # rotl32(k, 15)
+            k = (k * c2) & 0xFFFFFFFF
+
+            h ^= k
 
     # Finalization mixing
     h ^= length
@@ -110,6 +111,7 @@ def fnv1a_32(key: Any, seed: int = 0) -> int:
     elif isinstance(key, bytes):
         key_bytes = key
     else:
+        # For other types, convert to string first and then to bytes
         key_bytes = repr(key).encode("utf-8")
 
     # FNV-1a constants
