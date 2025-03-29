@@ -9,7 +9,7 @@ import random
 import sys
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from tinysift.core.base import SampleMaintainer
+from tiny_sift.core.base import SampleMaintainer
 
 T = TypeVar('T')  # Type for the items being processed
 

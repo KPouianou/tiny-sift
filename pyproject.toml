@@ -3,12 +3,12 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tinysift"
+name = "tiny-sift"
 version = "0.1.0"
 description = "Lightweight stream summarization library designed to complement GigQ"
 readme = "README.md"
 authors = [
-    {name = "TinySift Contributors"}
+    {name = "Tiny Sift Contributors"}
 ]
 license = {text = "MIT"}
 classifiers = [

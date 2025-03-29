@@ -1,15 +1,15 @@
 """
-TinySift - Lightweight Stream Summarization Library
+tiny-sift - Lightweight Stream Summarization Library
 
-TinySift is a Python library for summarizing data streams with minimal memory footprint
+tiny-sift is a Python library for summarizing data streams with minimal memory footprint
 using probabilistic data structures and algorithms.
 """
 
 __version__ = "0.1.0"
 
 # Import main classes to make them available at the top level
-from tinysift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
-from tinysift.core.base import (
+from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
+from tiny_sift.core.base import (
     CardinalityEstimator,
     FrequencyEstimator,
     SampleMaintainer,

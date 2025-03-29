@@ -10,7 +10,7 @@ import sys
 import time
 from collections import Counter
 
-from tinysift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
+from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
 
 
 def demonstrate_basic_reservoir():

@@ -7,7 +7,7 @@ import random
 import unittest
 from collections import Counter
 
-from tinysift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
+from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
 
 
 class TestReservoirSampling(unittest.TestCase):

@@ -19,7 +19,7 @@ pip install tinysift
 ## Quick Start
 
 ```python
-from tinysift.algorithms.reservoir import ReservoirSampling
+from tiny_sift.algorithms.reservoir import ReservoirSampling
 
 # Create a reservoir with size 100
 reservoir = ReservoirSampling(size=100)

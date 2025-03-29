@@ -2,7 +2,7 @@
 Core functionality for TinySift.
 """
 
-from tinysift.core.base import (
+from tiny_sift.core.base import (
     CardinalityEstimator,
     FrequencyEstimator,
     SampleMaintainer,
