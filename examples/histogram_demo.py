@@ -11,7 +11,7 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 
-from tiny_sift.algorithms.exponential_histogram import ExponentialHistogram
+from tiny_sift.algorithms.histogram import ExponentialHistogram
 
 
 def demonstrate_basic_histogram():

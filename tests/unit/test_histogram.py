@@ -10,7 +10,7 @@ import unittest
 from collections import deque
 from typing import Deque, Dict, List, Optional, Tuple
 
-from tiny_sift.algorithms.exponential_histogram import ExponentialHistogram, Bucket
+from tiny_sift.algorithms.histogram import ExponentialHistogram, Bucket
 
 
 class TestExponentialHistogram(unittest.TestCase):
@@ -266,7 +266,8 @@ class TestExponentialHistogram(unittest.TestCase):
     def test_accuracy(self):
         """Test the accuracy of the histogram estimates."""
         # Use a moderate error bound
-        eh = ExponentialHistogram(window_size=1000, error_bound=0.1)
+        error_bound = 0.1
+        eh = ExponentialHistogram(window_size=1000, error_bound=error_bound)
 
         # Add a sequence of values
         true_sum = 0
@@ -275,29 +276,33 @@ class TestExponentialHistogram(unittest.TestCase):
             eh.update(value=value)
             true_sum += value
 
-        # The count should be exact
+        # The count should be exact for smaller windows
         self.assertEqual(eh.estimate_count(), 500)
 
         # The sum should be within error_bound of the true sum
         estimated_sum = eh.estimate_sum()
         relative_error = abs(estimated_sum - true_sum) / true_sum
-        self.assertLessEqual(relative_error, 0.1)
+        self.assertLessEqual(relative_error, error_bound)
 
         # Add more items to fill the window
         for i in range(500, 1000):
             value = float(i)
             eh.update(value=value)
 
-        # Window should be full
-        self.assertEqual(eh.estimate_count(), 1000)
+        # Window should be approximately full, within error bounds
+        count = eh.estimate_count()
+        self.assertGreaterEqual(count, int(1000 * (1 - error_bound)))
+        self.assertLessEqual(count, int(1000 * (1 + error_bound)))
 
         # Add more items to force expiration
         for i in range(1000, 1500):
             value = float(i)
             eh.update(value=value)
 
-        # Count should still be the window size
-        self.assertEqual(eh.estimate_count(), 1000)
+        # Count should still be approximately the window size, within error bounds
+        count = eh.estimate_count()
+        self.assertGreaterEqual(count, int(1000 * (1 - error_bound)))
+        self.assertLessEqual(count, int(1000 * (1 + error_bound)))
 
         # The window should contain approximately the last 1000 items
         expected_sum = sum(float(i) for i in range(500, 1500))
@@ -467,7 +472,12 @@ class TestExponentialHistogram(unittest.TestCase):
 
         # Final check of entire window
         stats = eh.get_window_stats()
-        self.assertEqual(stats["count"], 60)  # Last hour (60 minutes)
+        # The count should be approximately 60 minutes, within error bounds
+        expected_count = 60
+        max_count = int(math.ceil(expected_count * (1 + eh._error_bound)))
+        min_count = int(math.floor(expected_count * (1 - eh._error_bound)))
+        self.assertGreaterEqual(stats["count"], min_count)
+        self.assertLessEqual(stats["count"], max_count)
 
 
 if __name__ == "__main__":

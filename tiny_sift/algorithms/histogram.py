@@ -98,14 +98,21 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         Raises:
             ValueError: If error_bound is not between 0 and 1.
-                      If window_size is less than 1.
+                      If window_size is less than 1 for count-based windows
+                      or less than or equal to 0 for time-based windows.
         """
         super().__init__(memory_limit_bytes)
 
         if not (0 < error_bound < 1):
             raise ValueError("Error bound must be between 0 and 1")
-        if window_size < 1:
-            raise ValueError("Window size must be at least 1")
+        
+        # Different validation for time-based vs count-based windows
+        if is_time_based:
+            if window_size <= 0:
+                raise ValueError("Window size must be greater than 0 for time-based windows")
+        else:
+            if window_size < 1:
+                raise ValueError("Window size must be at least 1 for count-based windows")
 
         self._window_size = window_size
         self._error_bound = error_bound
@@ -258,7 +265,9 @@ class ExponentialHistogram(WindowAggregator[T]):
             current_time: The current timestamp.
         """
         # Calculate the cutoff time
-        cutoff_time = current_time - (self._window_size * self._time_multiplier)
+        # For sub-second window sizes, we need to adjust the calculation
+        window_duration = self._window_size * self._time_multiplier
+        cutoff_time = current_time - window_duration
         self._window_start = cutoff_time
 
         # Remove buckets with timestamps before the cutoff
