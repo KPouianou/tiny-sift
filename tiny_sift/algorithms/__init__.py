@@ -10,4 +10,5 @@ __all__ = [
     "WeightedReservoirSampling",
     "CountMinSketch",
     "HyperLogLog",
+    "ExponentialHistogram",
 ]
