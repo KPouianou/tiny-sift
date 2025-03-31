@@ -682,9 +682,39 @@ class ExponentialHistogram(WindowAggregator[T]):
 
     def compress(self) -> None:
         """
-        Compress the histogram by merging buckets.
+        Compress the histogram structure by aggressively merging buckets.
 
-        This can be called to reduce memory usage at the cost of some precision.
+        This method forces merges starting from the buckets representing the
+        oldest data (those with the smallest sizes, i.e., size=1, 2, 4...)
+        and proceeds upwards. It repeatedly merges the two oldest buckets at
+        each size level until only one (or zero) remains, pushing the merged
+        result to the next level. The primary goal is to reduce the total
+        number of buckets stored, which can significantly decrease the memory
+        footprint of the histogram.
+
+        Use this method if you need to reduce memory usage, for example,
+        before serializing the histogram, during periods of memory pressure,
+        or if you prioritize memory savings over strict error guarantees
+        after the compression point.
+
+        **Warning:** Compression sacrifices precision for memory savings.
+        By merging buckets more aggressively than the standard algorithm
+        dictates based on the `error_bound` (k), the granularity of the
+        histogram increases, especially for older data within the window.
+        Consequently, the error in subsequent estimations (`estimate_count`,
+        `estimate_sum`, `estimate_min_max`) performed after compression
+        **may exceed the original `_error_bound` (epsilon)** configured
+        for this instance. The guarantees provided by the DGIM algorithm
+        regarding the error bound are potentially invalidated by this
+        operation.
+
+        Only use this method if this potential loss of precision and violation
+        of the configured error bound is an acceptable trade-off for lower
+        memory consumption.
+
+        Note: This operation invalidates any previously cached statistics.
+        Subsequent calls to `get_window_stats` will recalculate based on the
+        compressed structure.
         """
         # Skip if empty
         if not self._buckets:
