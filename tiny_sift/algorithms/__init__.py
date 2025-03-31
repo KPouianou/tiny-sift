@@ -2,6 +2,7 @@
 Algorithm implementations for TinySift.
 """
 
+from tiny_sift.algorithms.bloom import BloomFilter, CountingBloomFilter
 from tiny_sift.algorithms.countmin import CountMinSketch
 from tiny_sift.algorithms.histogram import ExponentialHistogram
 from tiny_sift.algorithms.hyperloglog import HyperLogLog
@@ -13,4 +14,6 @@ __all__ = [
     "CountMinSketch",
     "HyperLogLog",
     "ExponentialHistogram",
+    "BloomFilter",
+    "CountingBloomFilter",
 ]
