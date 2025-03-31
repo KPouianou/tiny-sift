@@ -105,14 +105,18 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         if not (0 < error_bound < 1):
             raise ValueError("Error bound must be between 0 and 1")
-        
+
         # Different validation for time-based vs count-based windows
         if is_time_based:
             if window_size <= 0:
-                raise ValueError("Window size must be greater than 0 for time-based windows")
+                raise ValueError(
+                    "Window size must be greater than 0 for time-based windows"
+                )
         else:
             if window_size < 1:
-                raise ValueError("Window size must be at least 1 for count-based windows")
+                raise ValueError(
+                    "Window size must be at least 1 for count-based windows"
+                )
 
         self._window_size = window_size
         self._error_bound = error_bound

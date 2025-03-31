@@ -330,7 +330,9 @@ class CountMinSketch(FrequencyEstimator[T]):
 
         # Restore counter values
         for i, row in enumerate(data["counters"]):
-            sketch._counters[i] = array.array("I", row)
+            sketch._counters[i] = array.array(
+                "L", row
+            )  # Use "L" for unsigned long, matching initialization
 
         # Restore other state
         sketch._total_frequency = data["total_frequency"]
