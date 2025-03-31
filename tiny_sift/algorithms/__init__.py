@@ -7,6 +7,7 @@ from tiny_sift.algorithms.countmin import CountMinSketch
 from tiny_sift.algorithms.histogram import ExponentialHistogram
 from tiny_sift.algorithms.hyperloglog import HyperLogLog
 from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
+from .quantile_sketch import TDigest
 
 __all__ = [
     "ReservoirSampling",
@@ -16,4 +17,5 @@ __all__ = [
     "ExponentialHistogram",
     "BloomFilter",
     "CountingBloomFilter",
+    "TDigest",
 ]
