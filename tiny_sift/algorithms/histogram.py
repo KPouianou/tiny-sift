@@ -160,8 +160,8 @@ class ExponentialHistogram(WindowAggregator[T]):
             item: The new item (not used in this implementation, but required by interface).
             value: The value associated with the item (default is 1.0 for simple counting).
             timestamp: Optional timestamp for the item. If None:
-                     - For time-based windows: current time will be used
-                     - For count-based windows: ignored (sequence numbers are used)
+                    - For time-based windows: current time will be used
+                    - For count-based windows: ignored (sequence numbers are used)
         """
         # Increment the items processed counter from base class
         super().update(item)
@@ -171,6 +171,11 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         # Get the current timestamp
         current_time = self._get_current_timestamp(timestamp)
+
+        # If time-based window, remove expired buckets first
+        # This ensures we expire old items before adding new ones
+        if self._is_time_based:
+            self._remove_expired(current_time)
 
         # Create a new bucket
         new_bucket = Bucket(timestamp=current_time, size=1, sum_value=value)
@@ -190,11 +195,9 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Check if we need to merge buckets
         self._merge_buckets()
 
-        # If time-based window, remove expired buckets
-        if self._is_time_based:
-            self._remove_expired(current_time)
-        else:
-            # For count-based windows, increment sequence number
+        # For count-based windows, we need to check if we exceed the window size
+        if not self._is_time_based:
+            # Increment sequence number
             self._sequence_number += 1
             if self._total_count > self._window_size:
                 # Remove oldest bucket if we exceed the window size
@@ -298,6 +301,9 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Update totals
         self._total_count -= expired_count
         self._total_sum -= expired_sum
+
+        # Invalidate cached stats since we've changed the state
+        self._cached_stats = None
 
     def _remove_oldest(self) -> None:
         """
