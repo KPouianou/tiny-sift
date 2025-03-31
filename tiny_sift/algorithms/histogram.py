@@ -53,21 +53,13 @@ class ExponentialHistogram(WindowAggregator[T]):
     """
     Exponential Histogram for sliding window statistics.
 
-    This implementation uses the DGIM algorithm to maintain approximate
-    counts, sums, and other statistics over a sliding window using
-    O(log(N) * log(1/ε)) space, where N is the window size and ε is
-    the error bound.
+    Uses buckets of exponentially increasing sizes to maintain approximate
+    counts, sums, and other statistics over a sliding window. Smaller buckets
+    represent more recent data for better precision, while older data is
+    stored in larger buckets to save memory.
 
-    The histogram maintains buckets of exponentially increasing sizes,
-    with smaller buckets for more recent items and larger buckets for
-    older items. This provides more precision for recent data.
-
-    The algorithm guarantees that the estimate is within a factor of
-    (1 ± ε) of the true value.
-
-    References:
-        - Datar, M., Gionis, A., Indyk, P., & Motwani, R. (2002).
-          Maintaining stream statistics over sliding windows.
+    Guarantees that all estimates are within a factor of (1 ± ε) of the true value,
+    where ε is the configured error bound.
     """
 
     def __init__(
@@ -84,30 +76,19 @@ class ExponentialHistogram(WindowAggregator[T]):
         Initialize a new Exponential Histogram.
 
         Args:
-            window_size: The size of the sliding window.
-                        For count-based windows, this is the number of items.
-                        For time-based windows, this is the duration in timestamp units.
-            error_bound: The maximum relative error in the estimates (epsilon),
-                        must be between 0 and 1.
-            memory_limit_bytes: Optional maximum memory usage in bytes.
-            is_time_based: Whether to use a time-based window (True) or
-                          a count-based window (False).
-            timestamp_unit: The unit for timestamps ("s" for seconds, "ms" for milliseconds).
-                          Only used if is_time_based is True.
-            track_min_max: Whether to track min and max values in each bucket.
-            seed: Optional random seed (not used in deterministic implementation).
-
-        Raises:
-            ValueError: If error_bound is not between 0 and 1.
-                      If window_size is less than 1 for count-based windows
-                      or less than or equal to 0 for time-based windows.
+            window_size: Size of the sliding window (items for count-based, duration for time-based)
+            error_bound: Maximum relative error in estimates (epsilon), must be between 0 and 1
+            memory_limit_bytes: Optional maximum memory usage in bytes
+            is_time_based: If True, window_size is in time units; otherwise, it's in items
+            timestamp_unit: Time unit for is_time_based ("s" for seconds, "ms" for milliseconds)
+            track_min_max: Whether to track min and max values in each bucket
+            seed: Optional random seed (not used in this deterministic implementation)
         """
         super().__init__(memory_limit_bytes)
 
         if not (0 < error_bound < 1):
             raise ValueError("Error bound must be between 0 and 1")
 
-        # Different validation for time-based vs count-based windows
         if is_time_based:
             if window_size <= 0:
                 raise ValueError(
@@ -124,24 +105,23 @@ class ExponentialHistogram(WindowAggregator[T]):
         self._is_time_based = is_time_based
         self._track_min_max = track_min_max
 
-        # Maximum number of buckets allowed for each timestamp
-        # This is determined by the error bound: k = ⌈1/ε⌉
+        # Maximum buckets per size - calculated as k = ⌈1/ε⌉ to ensure the error bound
         self._k = math.ceil(1 / error_bound)
 
         # For timestamps
         self._timestamp_unit = timestamp_unit
         self._time_multiplier = 1000 if timestamp_unit == "ms" else 1
 
-        # Initialize the counters
+        # Initialize the buckets: mapping from bucket size to list of buckets of that size
         self._buckets: Dict[int, List[Bucket]] = defaultdict(list)
 
-        # Keep track of the current sequence number for count-based windows
+        # For count-based windows: track sequence number
         self._sequence_number = 0
 
-        # For tracking the window boundary
+        # Window boundary tracking (oldest timestamp/sequence we should keep)
         self._window_start = 0
 
-        # For tracking statistics
+        # Statistics tracking
         self._total_count = 0
         self._total_sum = 0.0
 
@@ -158,11 +138,9 @@ class ExponentialHistogram(WindowAggregator[T]):
         Update the histogram with a new item from the stream.
 
         Args:
-            item: The new item (not used in this implementation, but required by interface).
-            value: The value associated with the item (default is 1.0 for simple counting).
-            timestamp: Optional timestamp for the item. If None:
-                    - For time-based windows: current time will be used
-                    - For count-based windows: ignored (sequence numbers are used)
+            item: The new item (not used in this implementation, but required by interface)
+            value: The value associated with the item (default is 1.0 for simple counting)
+            timestamp: Optional timestamp for time-based windows (current time used if None)
         """
         # Increment the items processed counter from base class
         super().update(item)
@@ -173,8 +151,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Get the current timestamp
         current_time = self._get_current_timestamp(timestamp)
 
-        # If time-based window, remove expired buckets first
-        # This ensures we expire old items before adding new ones
+        # For time-based window, remove expired buckets first
         if self._is_time_based:
             self._remove_expired(current_time)
 
@@ -186,48 +163,47 @@ class ExponentialHistogram(WindowAggregator[T]):
             new_bucket.min_value = value
             new_bucket.max_value = value
 
-        # Add the new bucket to the appropriate level (smallest size)
+        # Add the new bucket to the smallest size level
         self._buckets[1].append(new_bucket)
 
         # Update totals
         self._total_count += 1
         self._total_sum += value
 
-        # Check if we need to merge buckets
+        # Merge buckets to maintain our invariant (at most k buckets of each size)
         self._merge_buckets()
 
-        # For count-based windows, we need to check if we exceed the window size
+        # For count-based windows, check if we exceed the window size
         if not self._is_time_based:
             # Increment sequence number
             self._sequence_number += 1
             if self._total_count > self._window_size:
-                # Remove oldest bucket if we exceed the window size
+                # Remove oldest bucket if needed
                 self._remove_oldest()
 
     def _get_current_timestamp(
         self, timestamp: Optional[Union[int, float]] = None
-    ) -> Union[int, float]:  # Update return type hint
+    ) -> Union[int, float]:
         """
         Get the current timestamp for the item.
-        Args:
-            timestamp: Optional user-provided timestamp.
-        Returns:
-            The timestamp to use (float seconds/ms for time-based, int sequence for count-based).
+
+        Returns current time, provided timestamp, or sequence number based on window type.
         """
         if self._is_time_based:
             if timestamp is None:
                 # Use current time as float
                 return time.time() * self._time_multiplier
-            # Assume user timestamp is appropriate type (float or int)
             return timestamp
         else:
-            # For count-based windows, use sequence number (int)
+            # For count-based windows, use sequence number
             return self._sequence_number
 
     def _merge_buckets(self) -> None:
         """
-        Merge buckets to maintain the invariant that there are at most
-        k buckets of each size.
+        Merge buckets when we exceed k buckets of a given size.
+
+        This maintains our size invariant and error bound by combining
+        buckets of the same size into larger buckets when necessary.
         """
         size = 1
         while len(self._buckets[size]) > self._k:
@@ -269,12 +245,8 @@ class ExponentialHistogram(WindowAggregator[T]):
     def _remove_expired(self, current_time: float) -> None:
         """
         Remove buckets that are outside the time window.
-
-        Args:
-            current_time: The current timestamp.
         """
         # Calculate the cutoff time
-        # For sub-second window sizes, we need to adjust the calculation
         window_duration = self._window_size * self._time_multiplier
         cutoff_time = current_time - window_duration
         self._window_start = cutoff_time
@@ -304,13 +276,13 @@ class ExponentialHistogram(WindowAggregator[T]):
         self._total_count -= expired_count
         self._total_sum -= expired_sum
 
-        # Invalidate cached stats since we've changed the state
+        # Invalidate cached stats
         self._cached_stats = None
 
     def _remove_oldest(self) -> None:
         """
         Remove the oldest bucket to maintain the window size.
-        This is used for count-based windows.
+        For count-based windows.
         """
         # Find the smallest non-empty bucket size
         smallest_size = min(self._buckets.keys())
@@ -318,7 +290,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Update window start
         self._window_start = self._sequence_number - self._window_size
 
-        # Search all sizes to find the oldest bucket
+        # Find the oldest bucket across all sizes
         oldest_bucket = None
         oldest_size = None
         oldest_timestamp = float("inf")
@@ -345,10 +317,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         """
         Query the current state of the histogram.
 
-        This is a convenience method that calls get_window_stats.
-
-        Returns:
-            A dictionary with statistics for the current window.
+        Returns statistics for the current window via get_window_stats().
         """
         return self.get_window_stats()
 
@@ -398,21 +367,13 @@ class ExponentialHistogram(WindowAggregator[T]):
     def estimate_count(self) -> int:
         """
         Estimate the count of items in the current window.
-
-        Returns:
-            The estimated count.
         """
-        # The total count is maintained incrementally
         return self._total_count
 
     def estimate_sum(self) -> float:
         """
         Estimate the sum of values in the current window.
-
-        Returns:
-            The estimated sum.
         """
-        # The total sum is maintained incrementally
         return self._total_sum
 
     def estimate_min_max(self) -> Tuple[Optional[float], Optional[float]]:
@@ -420,8 +381,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         Estimate the minimum and maximum values in the current window.
 
         Returns:
-            A tuple of (min, max) values, or (None, None) if not tracking
-            or no data in the window.
+            A tuple of (min, max), or (None, None) if no data or not tracking.
         """
         if not self._track_min_max or not self._buckets:
             return (None, None)
@@ -448,20 +408,15 @@ class ExponentialHistogram(WindowAggregator[T]):
         """
         Merge this histogram with another one.
 
-        Note: Merging exponential histograms with different parameters is not
-        generally supported as it can lead to incorrect error bounds.
+        Creates a new histogram containing data from both inputs with
+        the same error guarantees.
 
         Args:
-            other: Another ExponentialHistogram with the same parameters.
+            other: Another ExponentialHistogram with identical parameters.
 
         Returns:
             A new merged ExponentialHistogram.
-
-        Raises:
-            TypeError: If other is not an ExponentialHistogram.
-            ValueError: If histograms have incompatible parameters.
         """
-        # Check that other is an ExponentialHistogram
         self._check_same_type(other)
 
         # Check that parameters match
@@ -552,9 +507,6 @@ class ExponentialHistogram(WindowAggregator[T]):
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert the histogram to a dictionary for serialization.
-
-        Returns:
-            A dictionary representation of the histogram.
         """
         data = self._base_dict()
 
@@ -594,12 +546,6 @@ class ExponentialHistogram(WindowAggregator[T]):
     def from_dict(cls, data: Dict[str, Any]) -> "ExponentialHistogram[T]":
         """
         Create a histogram from a dictionary representation.
-
-        Args:
-            data: The dictionary containing the histogram state.
-
-        Returns:
-            A new ExponentialHistogram.
         """
         # Create a new histogram
         hist = cls(
@@ -636,9 +582,6 @@ class ExponentialHistogram(WindowAggregator[T]):
     def estimate_size(self) -> int:
         """
         Estimate the current memory usage of this histogram in bytes.
-
-        Returns:
-            Estimated memory usage in bytes.
         """
         # Base size of the object
         size = sys.getsizeof(self)
@@ -659,10 +602,6 @@ class ExponentialHistogram(WindowAggregator[T]):
     def error_bound(self) -> Dict[str, float]:
         """
         Calculate the theoretical error bounds for this histogram.
-
-        Returns:
-            A dictionary with the error bounds:
-            - relative_error: The maximum relative error (epsilon)
         """
         return {
             "relative_error": self._error_bound,
@@ -671,8 +610,6 @@ class ExponentialHistogram(WindowAggregator[T]):
     def clear(self) -> None:
         """
         Reset the histogram to its initial state.
-
-        This method clears all buckets but keeps the same parameters.
         """
         self._buckets.clear()
         self._sequence_number = 0
@@ -684,39 +621,10 @@ class ExponentialHistogram(WindowAggregator[T]):
 
     def compress(self) -> None:
         """
-        Compress the histogram structure by aggressively merging buckets.
+        Compress the histogram by aggressively merging buckets.
 
-        This method forces merges starting from the buckets representing the
-        oldest data (those with the smallest sizes, i.e., size=1, 2, 4...)
-        and proceeds upwards. It repeatedly merges the two oldest buckets at
-        each size level until only one (or zero) remains, pushing the merged
-        result to the next level. The primary goal is to reduce the total
-        number of buckets stored, which can significantly decrease the memory
-        footprint of the histogram.
-
-        Use this method if you need to reduce memory usage, for example,
-        before serializing the histogram, during periods of memory pressure,
-        or if you prioritize memory savings over strict error guarantees
-        after the compression point.
-
-        **Warning:** Compression sacrifices precision for memory savings.
-        By merging buckets more aggressively than the standard algorithm
-        dictates based on the `error_bound` (k), the granularity of the
-        histogram increases, especially for older data within the window.
-        Consequently, the error in subsequent estimations (`estimate_count`,
-        `estimate_sum`, `estimate_min_max`) performed after compression
-        **may exceed the original `_error_bound` (epsilon)** configured
-        for this instance. The guarantees provided by the DGIM algorithm
-        regarding the error bound are potentially invalidated by this
-        operation.
-
-        Only use this method if this potential loss of precision and violation
-        of the configured error bound is an acceptable trade-off for lower
-        memory consumption.
-
-        Note: This operation invalidates any previously cached statistics.
-        Subsequent calls to `get_window_stats` will recalculate based on the
-        compressed structure.
+        This reduces memory usage at the cost of increased error.
+        The error after compression may exceed the configured error_bound.
         """
         # Skip if empty
         if not self._buckets:
@@ -780,17 +688,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         """
         Create an Exponential Histogram with the desired error guarantees.
 
-        Args:
-            relative_error: The target relative error (epsilon)
-            window_size: The size of the sliding window
-            is_time_based: Whether to use a time-based window
-            memory_limit_bytes: Optional maximum memory usage in bytes
-
-        Returns:
-            A new Exponential Histogram configured for the specified error bound
-
-        Raises:
-            ValueError: If relative_error is not between 0 and 1
+        Factory method optimized for specified error tolerance.
         """
         if not (0 < relative_error < 1):
             raise ValueError("Relative error must be between 0 and 1")
