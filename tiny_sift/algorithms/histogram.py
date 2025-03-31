@@ -21,6 +21,7 @@ from bisect import insort
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, Deque, Dict, List, Optional, Tuple, TypeVar, Union, cast
+from typing import Union
 
 from tiny_sift.core.base import WindowAggregator
 
@@ -41,7 +42,7 @@ class Bucket:
         max_value: The maximum value in the bucket (if tracking max)
     """
 
-    timestamp: int
+    timestamp: Union[int, float]  # Allow float for time-based
     size: int = 1
     sum_value: float = 0.0
     min_value: Optional[float] = None
@@ -203,23 +204,24 @@ class ExponentialHistogram(WindowAggregator[T]):
                 # Remove oldest bucket if we exceed the window size
                 self._remove_oldest()
 
-    def _get_current_timestamp(self, timestamp: Optional[int] = None) -> int:
+    def _get_current_timestamp(
+        self, timestamp: Optional[Union[int, float]] = None
+    ) -> Union[int, float]:  # Update return type hint
         """
         Get the current timestamp for the item.
-
         Args:
             timestamp: Optional user-provided timestamp.
-
         Returns:
-            The timestamp to use (current time if none provided).
+            The timestamp to use (float seconds/ms for time-based, int sequence for count-based).
         """
         if self._is_time_based:
             if timestamp is None:
-                # Use current time
-                return int(time.time() * self._time_multiplier)
+                # Use current time as float
+                return time.time() * self._time_multiplier
+            # Assume user timestamp is appropriate type (float or int)
             return timestamp
         else:
-            # For count-based windows, use sequence number
+            # For count-based windows, use sequence number (int)
             return self._sequence_number
 
     def _merge_buckets(self) -> None:
@@ -264,7 +266,7 @@ class ExponentialHistogram(WindowAggregator[T]):
             if len(self._buckets[size]) <= self._k:
                 break
 
-    def _remove_expired(self, current_time: int) -> None:
+    def _remove_expired(self, current_time: float) -> None:
         """
         Remove buckets that are outside the time window.
 

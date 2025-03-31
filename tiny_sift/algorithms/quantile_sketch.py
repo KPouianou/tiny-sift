@@ -468,18 +468,29 @@ class TDigest(StreamSummary):
                         incompatible/invalid data.
         """
         # Basic validation of required keys.
-        required_keys = {'compression', 'total_weight', 'centroids', 'items_processed'}
-        if 'type' not in data:
-            raise ValueError("Invalid dictionary format for TDigest. Missing required key: 'type'")
+        required_keys = {"compression", "total_weight", "centroids", "items_processed"}
+        if "type" not in data:
+            raise ValueError(
+                "Invalid dictionary format for TDigest. Missing required key: 'type'"
+            )
 
-        if data.get('type') != cls.__name__:
-            raise ValueError(f"Dictionary represents class '{data.get('type')}' but expected '{cls.__name__}'")
-        
-        required_tdigest_keys = {'compression', 'total_weight', 'centroids', 'items_processed'}
+        if data.get("type") != cls.__name__:
+            raise ValueError(
+                f"Dictionary represents class '{data.get('type')}' but expected '{cls.__name__}'"
+            )
+
+        required_tdigest_keys = {
+            "compression",
+            "total_weight",
+            "centroids",
+            "items_processed",
+        }
 
         missing_keys = required_tdigest_keys - data.keys()
         if missing_keys:
-             raise ValueError(f"Invalid dictionary format for TDigest. Missing keys: {missing_keys}")
+            raise ValueError(
+                f"Invalid dictionary format for TDigest. Missing keys: {missing_keys}"
+            )
 
         instance = cls(compression=data["compression"])
         instance._items_processed = data["items_processed"]
