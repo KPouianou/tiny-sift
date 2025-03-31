@@ -95,8 +95,11 @@ class ReservoirSampling(SampleMaintainer[T]):
         """
         Merge this reservoir with another reservoir.
 
-        This merges two reservoirs by creating a new one and randomly selecting
-        items from both reservoirs based on their relative sizes.
+        Note: This implementation uses a resampling heuristic that combines both
+        reservoirs and then takes a uniform random sample if the combined size
+        exceeds the target size. This is a simple approach that works well for many
+        applications but does not perfectly preserve the statistical properties
+        of reservoir sampling across the combined stream history.
 
         Args:
             other: Another ReservoirSampling object.
@@ -278,6 +281,49 @@ class WeightedReservoirSampling(ReservoirSampling[T]):
             A list containing the current sample (without weights).
         """
         return [item for item, _, _ in self._weighted_reservoir]
+
+    def merge(
+        self, other: "WeightedReservoirSampling[T]"
+    ) -> "WeightedReservoirSampling[T]":
+        """
+        Merge this weighted reservoir with another weighted reservoir.
+
+        This maintains the weighted sampling property by:
+        1. Combining all (item, weight, key) tuples from both reservoirs
+        2. Sorting by key (descending)
+        3. Keeping the top self._size elements
+
+        Args:
+            other: Another WeightedReservoirSampling object.
+
+        Returns:
+            A new merged WeightedReservoirSampling object.
+
+        Raises:
+            TypeError: If other is not a WeightedReservoirSampling object.
+        """
+        self._check_same_type(other)
+
+        # Create a new reservoir with the same size
+        result = WeightedReservoirSampling[T](self._size, self._memory_limit_bytes)
+
+        # Combine the weighted reservoirs
+        combined = self._weighted_reservoir + other._weighted_reservoir
+
+        # Sort by key (descending) - this preserves the weighted sampling property
+        combined.sort(key=lambda x: x[2], reverse=True)
+
+        # Keep only the top self._size elements
+        result._weighted_reservoir = combined[: self._size]
+
+        # Update the total weight (approximate - actual depends on full stream history)
+        # For merged reservoirs, an approximation is usually acceptable
+        result._total_weight = self._total_weight + other._total_weight
+
+        # Update the items processed count
+        result._items_processed = self._combine_items_processed(other)
+
+        return result
 
     def get_weighted_sample(self) -> List[tuple[T, float]]:
         """
