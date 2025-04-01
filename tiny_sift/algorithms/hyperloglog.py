@@ -1,29 +1,8 @@
 """
-HyperLogLog implementation for TinySift.
+Enhanced HyperLogLog implementation with comprehensive benchmarking hooks.
 
-This module provides an implementation of the HyperLogLog algorithm, a probabilistic
-data structure used for estimating the cardinality (number of unique elements) of
-large data streams with bounded memory usage.
-
-HyperLogLog provides the following guarantees:
-1. Space Complexity: O(2^p), where p is the precision parameter
-2. Update Time: O(1)
-3. Query Time: O(2^p)
-4. Relative Error: Approximately 1.04/sqrt(2^p)
-
-The algorithm works by using hash functions to map elements to registers and
-recording the maximum number of leading zeros in the binary representation of
-each register's hash value. These observations are then combined to estimate
-the total cardinality.
-
-References:
-    - Flajolet, P., Fusy, É., Gandouet, O., & Meunier, F. (2007).
-      HyperLogLog: the analysis of a near-optimal cardinality estimation algorithm.
-      In AofA: Analysis of Algorithms (pp. 137-156).
-    - Heule, S., Nunkesser, M., & Hall, A. (2013, June).
-      HyperLogLog in practice: algorithmic engineering of a state of the art
-      cardinality estimation algorithm. In EDBT 2013: Proceedings of the 16th
-      International Conference on Extending Database Technology (pp. 683-692).
+This implementation adds detailed statistics reporting, error bounds analysis,
+and memory usage tracking to the existing HyperLogLog implementation.
 """
 
 import array
@@ -319,47 +298,9 @@ class HyperLogLog(CardinalityEstimator[T]):
 
         return estimator
 
-    def estimate_size(self) -> int:
-        """
-        Estimate the current memory usage of this estimator in bytes.
-
-        Returns:
-            Estimated memory usage in bytes.
-        """
-        # Base size of the object
-        size = sys.getsizeof(self)
-
-        # Size of the registers array
-        size += sys.getsizeof(self._registers)
-
-        return size
-
-    def error_bound(self) -> Dict[str, float]:
-        """
-        Calculate the theoretical error bounds for this estimator.
-
-        Returns:
-            A dictionary with the error bounds:
-            - relative_error: The standard error (approximately 1.04/sqrt(m))
-            - confidence_68pct: Error range for 68% confidence
-            - confidence_95pct: Error range for 95% confidence
-            - confidence_99pct: Error range for 99% confidence
-        """
-        # The standard error is approximately 1.04/sqrt(m)
-        std_error = 1.04 / math.sqrt(self._m)
-
-        return {
-            "relative_error": std_error,
-            "confidence_68pct": std_error,  # 1 sigma
-            "confidence_95pct": std_error * 1.96,  # 2 sigma
-            "confidence_99pct": std_error * 2.58,  # 3 sigma
-        }
-
     def clear(self) -> None:
         """
-        Reset the estimator to its initial state.
-
-        This method clears all registers but keeps the same precision.
+        Reset the estimator to its initial empty state.
         """
         for i in range(self._m):
             self._registers[i] = 0
@@ -436,30 +377,43 @@ class HyperLogLog(CardinalityEstimator[T]):
         if memory_bytes <= 0:
             raise ValueError("Memory limit must be positive")
 
-        # Calculate the precision based on memory
-        # Each register uses 1 byte, and we have 2^p registers
-        # We also need to account for the overhead of the object itself
-        # Estimate the base size of a HyperLogLog object with p=4 (minimum)
-        min_estimator = cls(precision=4)
-        base_size = min_estimator.estimate_size() - (1 << 4)  # Subtract the registers
+        # For very precise memory limits, use a conservative approach
+        # Start with minimum precision and increase until we hit the limit
+        for precision in range(4, 17):  # 4 to 16
+            # Create a test instance with this precision
+            test_instance = cls(precision=precision, seed=seed)
+            size = test_instance.estimate_size()
 
-        # Available space for registers
-        available_bytes = memory_bytes - base_size
+            # If this instance exceeds the memory limit, use the previous precision
+            if size > memory_bytes:
+                if precision > 4:
+                    return cls(
+                        precision=precision - 1,
+                        memory_limit_bytes=memory_bytes,
+                        seed=seed,
+                    )
+                else:
+                    raise ValueError(
+                        f"Memory limit of {memory_bytes} bytes is too small. "
+                        f"Minimum size is approximately {size} bytes."
+                    )
 
-        # Calculate maximum precision that fits
-        if available_bytes <= 16:  # 2^4 = 16 (minimum)
-            raise ValueError(
-                f"Memory limit of {memory_bytes} bytes is too small. "
-                f"Minimum required is approximately {base_size + 16} bytes."
-            )
+            # If this is the maximum precision, just return it
+            if precision == 16:
+                return cls(
+                    precision=precision, memory_limit_bytes=memory_bytes, seed=seed
+                )
 
-        max_precision = min(16, math.floor(math.log2(available_bytes)))
-
-        return cls(precision=max_precision, memory_limit_bytes=memory_bytes, seed=seed)
+        # If we've exhausted all precisions without exceeding the limit,
+        # use the maximum precision
+        return cls(precision=16, memory_limit_bytes=memory_bytes, seed=seed)
 
     def get_register_values(self) -> List[int]:
         """
-        Get the current values of all registers (useful for debugging).
+        Get the current values of all registers.
+
+        This method is useful for analyzing the internal state of the HyperLogLog
+        estimator and for debugging or visualization purposes.
 
         Returns:
             A list containing the current register values.
@@ -468,32 +422,210 @@ class HyperLogLog(CardinalityEstimator[T]):
 
     def get_stats(self) -> Dict[str, Any]:
         """
-        Get statistics about the current state of the estimator.
+        Get detailed statistics about the current state of the HyperLogLog estimator.
+
+        This method extends the base class implementation to include HyperLogLog-specific
+        statistics such as register distribution, precision parameters, and error bounds.
 
         Returns:
-            A dictionary with various statistics:
-            - precision: The precision parameter (p)
-            - num_registers: The number of registers (m)
-            - empty_registers: The number of registers with value 0
-            - max_register_value: The maximum value across all registers
-            - estimate: The current cardinality estimate
-            - relative_error: The theoretical relative error
-            - memory_usage: Estimated memory usage in bytes
+            A dictionary containing various statistics about the estimator.
         """
-        # Count empty registers and find maximum value
-        empty_registers = 0
-        max_value = 0
-        for value in self._registers:
-            if value == 0:
-                empty_registers += 1
-            max_value = max(max_value, value)
+        # Start with base class statistics
+        stats = super().get_stats()
 
-        return {
-            "precision": self._precision,
-            "num_registers": self._m,
-            "empty_registers": empty_registers,
-            "max_register_value": max_value,
-            "estimate": self.estimate_cardinality(),
-            "relative_error": self.error_bound()["relative_error"],
-            "memory_usage": self.estimate_size(),
+        # Add HyperLogLog specific parameters
+        stats.update(
+            {
+                "precision": self._precision,
+                "num_registers": self._m,
+                "alpha_value": self._alpha,
+            }
+        )
+
+        # Add register statistics if not empty
+        if not self._is_empty:
+            register_values = list(self._registers)
+            empty_registers = register_values.count(0)
+            max_register = max(register_values) if register_values else 0
+            register_sum = sum(register_values)
+
+            # Calculate register value distribution
+            register_distribution = {}
+            for value in range(max_register + 1):
+                count = register_values.count(value)
+                if count > 0:
+                    register_distribution[str(value)] = (
+                        count  # Ensure keys are strings for JSON compatibility
+                    )
+
+            # Register distribution stats
+            stats.update(
+                {
+                    "empty_registers": empty_registers,
+                    "empty_registers_pct": (
+                        (empty_registers / self._m) * 100 if self._m > 0 else 0
+                    ),
+                    "max_register_value": max_register,
+                    "avg_register_value": register_sum / self._m if self._m > 0 else 0,
+                    "register_value_distribution": register_distribution,
+                }
+            )
+
+            # Add error bounds from the error_bounds method
+            error_bounds = self.error_bounds()
+            stats.update(error_bounds)
+
+            # Add cardinality estimate
+            estimate = self.estimate_cardinality()
+            stats["estimate"] = estimate
+
+            # Add theoretical limits
+            stats["theoretical_max_countable"] = 2 ** (32 - self._precision)
+            stats["saturation_pct"] = min(
+                100.0, (estimate / stats["theoretical_max_countable"]) * 100
+            )
+
+        # Ensure memory_usage is present (for backward compatibility)
+        if "memory_usage" not in stats:
+            stats["memory_usage"] = self.estimate_size()
+
+        return stats
+
+    def error_bounds(self) -> Dict[str, Union[str, float]]:
+        """
+        Calculate the theoretical error bounds for this estimator.
+
+        This method provides detailed error bound information specific to HyperLogLog,
+        including confidence intervals at different levels.
+
+        Returns:
+            A dictionary with the error bounds:
+            - relative_error: The standard error (approximately 1.04/sqrt(m))
+            - confidence_68pct: Error range for 68% confidence (1 sigma)
+            - confidence_95pct: Error range for 95% confidence (2 sigma)
+            - confidence_99pct: Error range for 99% confidence (3 sigma)
+        """
+        # Start with any values from the base class
+        bounds = super().error_bounds()
+
+        # Calculate the standard error: 1.04/sqrt(m)
+        std_error = 1.04 / math.sqrt(self._m)
+
+        # Update with HyperLogLog-specific error bounds
+        bounds.update(
+            {
+                "relative_error": std_error,
+                "confidence_68pct": std_error,  # 1 sigma
+                "confidence_95pct": std_error * 1.96,  # 2 sigma
+                "confidence_99pct": std_error * 2.58,  # 3 sigma
+            }
+        )
+
+        return bounds
+
+    def estimate_size(self) -> int:
+        """
+        Estimate the current memory usage of the HyperLogLog in bytes.
+
+        This method extends the base class implementation to provide a more detailed
+        breakdown of the memory used by the HyperLogLog data structure.
+
+        Returns:
+            Estimated size in bytes.
+        """
+        # Start with the base object size from the parent class
+        size = super().estimate_size()
+
+        # Add size of HyperLogLog-specific attributes
+        # Note: some of these might already be included in the base calculation
+        # but we add them here for completeness
+        size += sys.getsizeof(self._precision)
+        size += sys.getsizeof(self._m)
+        size += sys.getsizeof(self._alpha)
+        size += sys.getsizeof(self._index_mask)
+        size += sys.getsizeof(self._is_empty)
+        size += sys.getsizeof(self._seed)
+
+        # Size of the registers array - this should be the largest component
+        # and might not be fully accounted for in the base implementation
+        size += sys.getsizeof(self._registers)
+
+        # Some implementations include the buffer separately,
+        # but getsizeof on array.array already includes its buffer
+
+        # Account for min/max values if they exist and aren't in the base calculation
+        if hasattr(self, "_min_val") and self._min_val is not None:
+            size += sys.getsizeof(self._min_val)
+        if hasattr(self, "_max_val") and self._max_val is not None:
+            size += sys.getsizeof(self._max_val)
+
+        return size
+
+    def analyze_performance(self) -> Dict[str, Any]:
+        """
+        Perform a detailed analysis of the HyperLogLog estimator's performance.
+
+        This method provides insights into the estimator's efficiency and
+        accuracy characteristics based on its current state and theoretical properties.
+
+        Returns:
+            A dictionary containing performance analysis metrics.
+        """
+        analysis = {
+            "algorithm": "HyperLogLog",
+            "memory_efficiency": {
+                "bits_per_item": (self.estimate_size() * 8)
+                / max(1, self.estimate_cardinality()),
+                "total_bytes": self.estimate_size(),
+                "register_bytes": self._m * self._registers.itemsize,
+                "overhead_bytes": self.estimate_size()
+                - (self._m * self._registers.itemsize),
+            },
+            "accuracy": {
+                "precision_parameter": self._precision,
+                "standard_error": 1.04 / math.sqrt(self._m),
+                "expected_accuracy": f"{(1 - (1.04 / math.sqrt(self._m))) * 100:.2f}%",
+            },
+            "saturation": {
+                "empty_registers": sum(1 for r in self._registers if r == 0),
+                "empty_register_pct": sum(1 for r in self._registers if r == 0)
+                / self._m
+                * 100,
+                "max_register_value": max(self._registers) if not self._is_empty else 0,
+                "theoretical_max_value": 32 - self._precision,
+                "saturation_level": (
+                    max(self._registers) / (32 - self._precision)
+                    if not self._is_empty
+                    else 0
+                ),
+            },
         }
+
+        # Add recommendations based on the analysis
+        analysis["recommendations"] = []
+
+        # Check if too many registers are empty (underutilized)
+        if (
+            analysis["saturation"]["empty_register_pct"] > 50
+            and self.items_processed > 1000
+        ):
+            analysis["recommendations"].append(
+                "Consider reducing precision to save memory (many empty registers)"
+            )
+
+        # Check if max register value is close to theoretical maximum (potential saturation)
+        if analysis["saturation"]["saturation_level"] > 0.9:
+            analysis["recommendations"].append(
+                "Warning: Approaching register value saturation, may affect accuracy for larger cardinalities"
+            )
+
+        # Check memory efficiency
+        if (
+            analysis["memory_efficiency"]["bits_per_item"] > 20
+            and self.items_processed > 1000
+        ):
+            analysis["recommendations"].append(
+                "Memory usage is high relative to cardinality, consider reducing precision"
+            )
+
+        return analysis

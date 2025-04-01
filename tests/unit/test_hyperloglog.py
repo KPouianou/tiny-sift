@@ -338,7 +338,7 @@ class TestHyperLogLog(unittest.TestCase):
 
         for p in precisions:
             hll = HyperLogLog(precision=p)
-            bounds = hll.error_bound()
+            bounds = hll.error_bounds()
 
             # Check expected standard error: 1.04/sqrt(2^p)
             expected_std_error = 1.04 / math.sqrt(2**p)

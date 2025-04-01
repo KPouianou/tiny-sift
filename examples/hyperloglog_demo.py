@@ -21,7 +21,7 @@ def demonstrate_basic_hyperloglog():
     hll = HyperLogLog(seed=42)
 
     print(
-        f"Using precision p={hll._precision} (error ~{hll.error_bound()['relative_error']:.2%})"
+        f"Using precision p={hll._precision} (error ~{hll.error_bounds()['relative_error']:.2%})"
     )
     print(f"Memory usage: ~{hll.estimate_size()} bytes")
 
@@ -63,7 +63,7 @@ def demonstrate_zipf_distribution():
     # Create a HyperLogLog estimator
     hll = HyperLogLog(precision=14, seed=42)
     print(
-        f"Using precision p={hll._precision} (error ~{hll.error_bound()['relative_error']:.2%})"
+        f"Using precision p={hll._precision} (error ~{hll.error_bounds()['relative_error']:.2%})"
     )
 
     # Generate a stream with Zipf distribution (power law)
@@ -123,7 +123,7 @@ def demonstrate_zipf_distribution():
     print(f"  True unique count: {true_count:,}")
     print(f"  HyperLogLog estimate: {final_estimate:,}")
     print(f"  Relative error: {rel_error:.4%}")
-    print(f"  Theoretical error bound: {hll.error_bound()['relative_error']:.4%}")
+    print(f"  Theoretical error bound: {hll.error_bounds()['relative_error']:.4%}")
     print(f"  Memory usage: {hll.estimate_size():,} bytes")
 
     # For comparison, show the memory that would be required for an exact count
@@ -154,7 +154,7 @@ def demonstrate_precision_comparison():
         estimate = hll.estimate_cardinality()
         rel_error = abs(estimate - n_unique) / n_unique
         memory = hll.estimate_size()
-        theoretical_error = hll.error_bound()["relative_error"]
+        theoretical_error = hll.error_bounds()["relative_error"]
 
         results.append((p, estimate, rel_error, memory, theoretical_error))
 
