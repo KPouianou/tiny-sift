@@ -19,7 +19,7 @@ class TestExponentialHistogram(unittest.TestCase):
     def test_init(self):
         """Test initialization with valid and invalid parameters."""
         # Valid initialization
-        eh = ExponentialHistogram(window_size=1000, error_bound=0.01)
+        eh = ExponentialHistogram(window_size=1000, error_bounds=0.01)
         self.assertEqual(eh._window_size, 1000)
         self.assertEqual(eh._error_bound, 0.01)
         self.assertEqual(eh._k, 100)  # 1/0.01 = 100
@@ -27,7 +27,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
         # Time-based window
         eh_time = ExponentialHistogram(
-            window_size=3600, error_bound=0.05, is_time_based=True
+            window_size=3600, error_bounds=0.05, is_time_based=True
         )
         self.assertEqual(eh_time._window_size, 3600)
         self.assertEqual(eh_time._error_bound, 0.05)
@@ -36,18 +36,18 @@ class TestExponentialHistogram(unittest.TestCase):
 
         # Invalid error bound
         with self.assertRaises(ValueError):
-            ExponentialHistogram(window_size=1000, error_bound=0)
+            ExponentialHistogram(window_size=1000, error_bounds=0)
 
         with self.assertRaises(ValueError):
-            ExponentialHistogram(window_size=1000, error_bound=1.5)
+            ExponentialHistogram(window_size=1000, error_bounds=1.5)
 
         # Invalid window size
         with self.assertRaises(ValueError):
-            ExponentialHistogram(window_size=0, error_bound=0.01)
+            ExponentialHistogram(window_size=0, error_bounds=0.01)
 
     def test_update_count_based(self):
         """Test updating with count-based window."""
-        eh = ExponentialHistogram(window_size=10, error_bound=0.1)
+        eh = ExponentialHistogram(window_size=10, error_bounds=0.1)
 
         # Add 5 items with different values
         values = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -70,7 +70,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_window_expiration_count_based(self):
         """Test that items are correctly expired from count-based windows."""
-        eh = ExponentialHistogram(window_size=5, error_bound=0.1)
+        eh = ExponentialHistogram(window_size=5, error_bounds=0.1)
 
         # Add 10 items (exceeding window size)
         for i in range(10):
@@ -92,7 +92,7 @@ class TestExponentialHistogram(unittest.TestCase):
     def test_update_time_based(self):
         """Test updating with time-based window."""
         # Use a small window of 2 seconds
-        eh = ExponentialHistogram(window_size=2, error_bound=0.1, is_time_based=True)
+        eh = ExponentialHistogram(window_size=2, error_bounds=0.1, is_time_based=True)
 
         # Add items with timestamps
         # t = 0s
@@ -120,8 +120,8 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_bucket_merging(self):
         """Test that buckets are correctly merged when we exceed k."""
-        # Use a small k value (k = 2, error_bound = 0.5)
-        eh = ExponentialHistogram(window_size=100, error_bound=0.5)
+        # Use a small k value (k = 2, error_bounds = 0.5)
+        eh = ExponentialHistogram(window_size=100, error_bounds=0.5)
         self.assertEqual(eh._k, 2)  # 1/0.5 = 2
 
         # Add 5 items to force bucket merges
@@ -150,7 +150,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_min_max_tracking(self):
         """Test tracking of min and max values."""
-        eh = ExponentialHistogram(window_size=100, error_bound=0.1, track_min_max=True)
+        eh = ExponentialHistogram(window_size=100, error_bounds=0.1, track_min_max=True)
 
         # Add some values
         values = [5.0, 2.0, 8.0, 1.0, 10.0]
@@ -186,7 +186,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_serialization(self):
         """Test serialization and deserialization."""
-        eh = ExponentialHistogram(window_size=100, error_bound=0.1, track_min_max=True)
+        eh = ExponentialHistogram(window_size=100, error_bounds=0.1, track_min_max=True)
 
         # Add some items
         for i in range(10):
@@ -198,7 +198,7 @@ class TestExponentialHistogram(unittest.TestCase):
         # Check dict contents
         self.assertEqual(data["type"], "ExponentialHistogram")
         self.assertEqual(data["window_size"], 100)
-        self.assertEqual(data["error_bound"], 0.1)
+        self.assertEqual(data["error_bounds"], 0.1)
         self.assertEqual(data["total_count"], 10)
         self.assertEqual(data["total_sum"], sum(range(10)))
 
@@ -233,8 +233,8 @@ class TestExponentialHistogram(unittest.TestCase):
     def test_merge(self):
         """Test merging two histograms."""
         # Create two histograms
-        eh1 = ExponentialHistogram(window_size=100, error_bound=0.1)
-        eh2 = ExponentialHistogram(window_size=100, error_bound=0.1)
+        eh1 = ExponentialHistogram(window_size=100, error_bounds=0.1)
+        eh2 = ExponentialHistogram(window_size=100, error_bounds=0.1)
 
         # Add different items to each
         for i in range(5):
@@ -251,23 +251,25 @@ class TestExponentialHistogram(unittest.TestCase):
         self.assertEqual(merged.estimate_sum(), 5.0 + 10.0)
 
         # Try merging with incompatible parameters
-        eh3 = ExponentialHistogram(window_size=200, error_bound=0.1)
+        eh3 = ExponentialHistogram(window_size=200, error_bounds=0.1)
         with self.assertRaises(ValueError):
             eh1.merge(eh3)
 
-        eh4 = ExponentialHistogram(window_size=100, error_bound=0.2)
+        eh4 = ExponentialHistogram(window_size=100, error_bounds=0.2)
         with self.assertRaises(ValueError):
             eh1.merge(eh4)
 
-        eh5 = ExponentialHistogram(window_size=100, error_bound=0.1, is_time_based=True)
+        eh5 = ExponentialHistogram(
+            window_size=100, error_bounds=0.1, is_time_based=True
+        )
         with self.assertRaises(ValueError):
             eh1.merge(eh5)
 
     def test_accuracy(self):
         """Test the accuracy of the histogram estimates."""
         # Use a moderate error bound
-        error_bound = 0.1
-        eh = ExponentialHistogram(window_size=1000, error_bound=error_bound)
+        error_bounds = 0.1
+        eh = ExponentialHistogram(window_size=1000, error_bounds=error_bounds)
 
         # Add a sequence of values
         true_sum = 0
@@ -279,10 +281,10 @@ class TestExponentialHistogram(unittest.TestCase):
         # The count should be exact for smaller windows
         self.assertEqual(eh.estimate_count(), 500)
 
-        # The sum should be within error_bound of the true sum
+        # The sum should be within error_bounds of the true sum
         estimated_sum = eh.estimate_sum()
         relative_error = abs(estimated_sum - true_sum) / true_sum
-        self.assertLessEqual(relative_error, error_bound)
+        self.assertLessEqual(relative_error, error_bounds)
 
         # Add more items to fill the window
         for i in range(500, 1000):
@@ -291,8 +293,8 @@ class TestExponentialHistogram(unittest.TestCase):
 
         # Window should be approximately full, within error bounds
         count = eh.estimate_count()
-        self.assertGreaterEqual(count, int(1000 * (1 - error_bound)))
-        self.assertLessEqual(count, int(1000 * (1 + error_bound)))
+        self.assertGreaterEqual(count, int(1000 * (1 - error_bounds)))
+        self.assertLessEqual(count, int(1000 * (1 + error_bounds)))
 
         # Add more items to force expiration
         for i in range(1000, 1500):
@@ -301,8 +303,8 @@ class TestExponentialHistogram(unittest.TestCase):
 
         # Count should still be approximately the window size, within error bounds
         count = eh.estimate_count()
-        self.assertGreaterEqual(count, int(1000 * (1 - error_bound)))
-        self.assertLessEqual(count, int(1000 * (1 + error_bound)))
+        self.assertGreaterEqual(count, int(1000 * (1 - error_bounds)))
+        self.assertLessEqual(count, int(1000 * (1 + error_bounds)))
 
         # The window should contain approximately the last 1000 items
         expected_sum = sum(float(i) for i in range(500, 1500))
@@ -312,7 +314,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_compress(self):
         """Test the compress method."""
-        eh = ExponentialHistogram(window_size=1000, error_bound=0.1)
+        eh = ExponentialHistogram(window_size=1000, error_bounds=0.1)
 
         # Add items
         for i in range(100):
@@ -334,7 +336,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_clear(self):
         """Test clearing the histogram."""
-        eh = ExponentialHistogram(window_size=100, error_bound=0.1)
+        eh = ExponentialHistogram(window_size=100, error_bounds=0.1)
 
         # Add some items
         for i in range(10):
@@ -375,7 +377,7 @@ class TestExponentialHistogram(unittest.TestCase):
 
     def test_estimate_size(self):
         """Test memory usage estimation."""
-        eh = ExponentialHistogram(window_size=1000, error_bound=0.1)
+        eh = ExponentialHistogram(window_size=1000, error_bounds=0.1)
 
         # Empty histogram should have a minimum size
         initial_size = eh.estimate_size()
@@ -393,7 +395,7 @@ class TestExponentialHistogram(unittest.TestCase):
         """Test time-based window with actual time passing."""
         # This is a timing-dependent test, so it may be flaky
         # We'll use a very small window (0.1 seconds)
-        eh = ExponentialHistogram(window_size=0.1, error_bound=0.1, is_time_based=True)
+        eh = ExponentialHistogram(window_size=0.1, error_bounds=0.1, is_time_based=True)
 
         # Add an item now
         eh.update(value=1.0)
@@ -415,7 +417,7 @@ class TestExponentialHistogram(unittest.TestCase):
         """Test a more realistic use case with mixed values and timestamp patterns."""
         # Create a histogram with 1 hour window and 1% error
         eh = ExponentialHistogram(
-            window_size=3600, error_bound=0.01, is_time_based=True, track_min_max=True
+            window_size=3600, error_bounds=0.01, is_time_based=True, track_min_max=True
         )
 
         # Simulate a stream of measurements over 2 hours

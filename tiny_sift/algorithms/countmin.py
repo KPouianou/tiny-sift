@@ -356,7 +356,7 @@ class CountMinSketch(FrequencyEstimator[T]):
 
         return size
 
-    def error_bound(self) -> Dict[str, float]:
+    def error_bounds(self) -> Dict[str, float]:
         """
         Calculate the theoretical error bounds for this sketch.
 
@@ -364,12 +364,12 @@ class CountMinSketch(FrequencyEstimator[T]):
             A dictionary with the error bounds:
             - epsilon: The error factor (errors are less than epsilon * total_frequency)
             - delta: The probability of exceeding the error bound
-            - error_bound: The absolute error bound (epsilon * total_frequency)
+            - error_bounds: The absolute error bound (epsilon * total_frequency)
         """
         return {
             "epsilon": self._epsilon,
             "delta": self._delta,
-            "error_bound": self._epsilon * self._total_frequency,
+            "error_bounds": self._epsilon * self._total_frequency,
         }
 
     def clear(self) -> None:

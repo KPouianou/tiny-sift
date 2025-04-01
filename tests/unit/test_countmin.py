@@ -61,7 +61,7 @@ class TestCountMinSketch(unittest.TestCase):
         expected_delta = 0.006737946999085467  # e^(-depth)
 
         # Get actual bounds
-        bounds = cms.error_bound()
+        bounds = cms.error_bounds()
 
         # Check bounds are close to expected (allow for floating point errors)
         self.assertAlmostEqual(bounds["epsilon"], expected_epsilon, places=10)

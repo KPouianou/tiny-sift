@@ -19,7 +19,7 @@ def demonstrate_basic_histogram():
     print("\n=== Basic Exponential Histogram Demo ===")
 
     # Create a histogram with window size of 100 and 1% error bound
-    histogram = ExponentialHistogram(window_size=100, error_bound=0.01)
+    histogram = ExponentialHistogram(window_size=100, error_bounds=0.01)
 
     print(f"Window size: {histogram._window_size} items")
     print(f"Error bound: {histogram._error_bound:.1%}")
@@ -69,7 +69,7 @@ def demonstrate_time_based_window():
     # Create a histogram with 60 second window and 1% error
     window_seconds = 60
     histogram = ExponentialHistogram(
-        window_size=window_seconds, error_bound=0.01, is_time_based=True
+        window_size=window_seconds, error_bounds=0.01, is_time_based=True
     )
 
     print(f"Window size: {window_seconds} seconds")
@@ -144,7 +144,7 @@ def demonstrate_min_max_tracking():
 
     # Create a histogram with min/max tracking
     histogram = ExponentialHistogram(
-        window_size=100, error_bound=0.05, track_min_max=True
+        window_size=100, error_bounds=0.05, track_min_max=True
     )
 
     print("Processing stream with random values...")
@@ -185,7 +185,7 @@ def demonstrate_serialization():
 
     # Create and populate a histogram
     histogram = ExponentialHistogram(
-        window_size=3600, error_bound=0.01, is_time_based=True
+        window_size=3600, error_bounds=0.01, is_time_based=True
     )
 
     # Add some data
@@ -237,7 +237,7 @@ def demonstrate_gigq_integration():
     # Create a histogram for tracking sensor statistics
     histogram = ExponentialHistogram(
         window_size=24 * 3600,  # 24 hour window
-        error_bound=0.01,
+        error_bounds=0.01,
         is_time_based=True,
         track_min_max=True,
     )
@@ -360,7 +360,7 @@ def demonstrate_pandas_integration():
     # Create histogram with 24-hour window
     histogram = ExponentialHistogram(
         window_size=24 * 60 * 60,  # 24 hours in seconds
-        error_bound=0.01,
+        error_bounds=0.01,
         is_time_based=True,
     )
 

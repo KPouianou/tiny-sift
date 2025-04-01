@@ -65,7 +65,7 @@ class ExponentialHistogram(WindowAggregator[T]):
     def __init__(
         self,
         window_size: int = 10000,
-        error_bound: float = 0.01,
+        error_bounds: float = 0.01,
         memory_limit_bytes: Optional[int] = None,
         is_time_based: bool = False,
         timestamp_unit: str = "s",
@@ -77,7 +77,7 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         Args:
             window_size: Size of the sliding window (items for count-based, duration for time-based)
-            error_bound: Maximum relative error in estimates (epsilon), must be between 0 and 1
+            error_bounds: Maximum relative error in estimates (epsilon), must be between 0 and 1
             memory_limit_bytes: Optional maximum memory usage in bytes
             is_time_based: If True, window_size is in time units; otherwise, it's in items
             timestamp_unit: Time unit for is_time_based ("s" for seconds, "ms" for milliseconds)
@@ -86,7 +86,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         """
         super().__init__(memory_limit_bytes)
 
-        if not (0 < error_bound < 1):
+        if not (0 < error_bounds < 1):
             raise ValueError("Error bound must be between 0 and 1")
 
         if is_time_based:
@@ -101,12 +101,12 @@ class ExponentialHistogram(WindowAggregator[T]):
                 )
 
         self._window_size = window_size
-        self._error_bound = error_bound
+        self._error_bound = error_bounds
         self._is_time_based = is_time_based
         self._track_min_max = track_min_max
 
         # Maximum buckets per size - calculated as k = ⌈1/ε⌉ to ensure the error bound
-        self._k = math.ceil(1 / error_bound)
+        self._k = math.ceil(1 / error_bounds)
 
         # For timestamps
         self._timestamp_unit = timestamp_unit
@@ -431,7 +431,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Create a new histogram with the same parameters
         result = ExponentialHistogram[T](
             window_size=self._window_size,
-            error_bound=self._error_bound,
+            error_bounds=self._error_bound,
             memory_limit_bytes=self._memory_limit_bytes,
             is_time_based=self._is_time_based,
             timestamp_unit=self._timestamp_unit,
@@ -527,7 +527,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         data.update(
             {
                 "window_size": self._window_size,
-                "error_bound": self._error_bound,
+                "error_bounds": self._error_bound,
                 "is_time_based": self._is_time_based,
                 "timestamp_unit": self._timestamp_unit,
                 "track_min_max": self._track_min_max,
@@ -550,7 +550,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         # Create a new histogram
         hist = cls(
             window_size=data["window_size"],
-            error_bound=data["error_bound"],
+            error_bounds=data["error_bounds"],
             memory_limit_bytes=data.get("memory_limit_bytes"),
             is_time_based=data["is_time_based"],
             timestamp_unit=data["timestamp_unit"],
@@ -599,7 +599,7 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         return size
 
-    def error_bound(self) -> Dict[str, float]:
+    def error_bounds(self) -> Dict[str, float]:
         """
         Calculate the theoretical error bounds for this histogram.
         """
@@ -624,7 +624,7 @@ class ExponentialHistogram(WindowAggregator[T]):
         Compress the histogram by aggressively merging buckets.
 
         This reduces memory usage at the cost of increased error.
-        The error after compression may exceed the configured error_bound.
+        The error after compression may exceed the configured error_bounds.
         """
         # Skip if empty
         if not self._buckets:
@@ -695,7 +695,7 @@ class ExponentialHistogram(WindowAggregator[T]):
 
         return cls(
             window_size=window_size,
-            error_bound=relative_error,
+            error_bounds=relative_error,
             memory_limit_bytes=memory_limit_bytes,
             is_time_based=is_time_based,
         )
