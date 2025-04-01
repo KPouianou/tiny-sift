@@ -248,7 +248,7 @@ class TestWeightedReservoirSampling(unittest.TestCase):
         self.assertEqual(set(sample), set(["A", "B", "C"]))
 
         # Check total weight
-        self.assertEqual(wrs._total_weight, 16.0)
+        self.assertEqual(wrs._total_stream_weight, 16.0)
 
         # Invalid weight
         with self.assertRaises(ValueError):
@@ -321,7 +321,7 @@ class TestWeightedReservoirSampling(unittest.TestCase):
         self.assertEqual(data["type"], "WeightedReservoirSampling")
         self.assertEqual(data["size"], 10)
         self.assertEqual(data["items_processed"], 3)
-        self.assertEqual(data["total_weight"], 16.0)
+        self.assertEqual(data["total_stream_weight"], 16.0)
         self.assertEqual(len(data["weighted_reservoir"]), 3)
 
         # Deserialize from dict
@@ -330,7 +330,7 @@ class TestWeightedReservoirSampling(unittest.TestCase):
         # Check that the deserialized object matches the original
         self.assertEqual(wrs2._size, wrs._size)
         self.assertEqual(wrs2._items_processed, wrs._items_processed)
-        self.assertEqual(wrs2._total_weight, wrs._total_weight)
+        self.assertEqual(wrs2._total_stream_weight, wrs._total_stream_weight)
         self.assertEqual(wrs2.get_sample(), wrs.get_sample())
 
         # Test JSON serialization
@@ -340,7 +340,7 @@ class TestWeightedReservoirSampling(unittest.TestCase):
         # Check that the deserialized object matches the original
         self.assertEqual(wrs3._size, wrs._size)
         self.assertEqual(wrs3._items_processed, wrs._items_processed)
-        self.assertEqual(wrs3._total_weight, wrs._total_weight)
+        self.assertEqual(wrs3._total_stream_weight, wrs._total_stream_weight)
         self.assertEqual(wrs3.get_sample(), wrs.get_sample())
 
     def test_get_weighted_sample(self):

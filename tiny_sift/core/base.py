@@ -373,14 +373,30 @@ class StreamSummary(Generic[T, R], abc.ABC):
         if self._memory_limit_bytes is not None:
             stats["memory_limit_bytes"] = self._memory_limit_bytes
             stats["memory_usage_pct"] = (
-                self.estimate_size() / self._memory_limit_bytes
-            ) * 100
+                self.estimate_size() / self._memory_limit_bytes * 100
+                if self._memory_limit_bytes > 0
+                else 0.0  # Avoid division by zero
+            )
 
         # Add performance tracking stats if available
         if self._update_count > 0:
             stats["avg_update_time_ns"] = (
                 self._total_update_time / self._update_count
             ) * 1e9
+            # Include last update time if available
+            if self._last_update_time > 0.0:
+                stats["last_update_time_ns"] = self._last_update_time * 1e9
+
+        if (
+            self._track_recent_updates
+            and self._recent_update_times
+            and len(self._recent_update_times) > 0
+        ):
+            # Convert to nanoseconds for better readability of small values
+            recent_times_ns = [t * 1e9 for t in self._recent_update_times]
+            stats["recent_update_times_ns"] = recent_times_ns
+            stats["min_update_time_ns"] = min(recent_times_ns)
+            stats["max_update_time_ns"] = max(recent_times_ns)
 
         # Add error bounds information
         error_bounds = self.error_bounds()
