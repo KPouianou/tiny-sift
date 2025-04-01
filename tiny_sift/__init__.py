@@ -12,6 +12,7 @@ from tiny_sift.algorithms.countmin import CountMinSketch
 from tiny_sift.algorithms.histogram import ExponentialHistogram
 from tiny_sift.algorithms.hyperloglog import HyperLogLog
 from tiny_sift.algorithms.reservoir import ReservoirSampling, WeightedReservoirSampling
+from tiny_sift.algorithms.spacesaving import SpaceSaving
 from .algorithms.quantile_sketch import TDigest
 from tiny_sift.core.base import (
     CardinalityEstimator,
@@ -34,5 +35,6 @@ __all__ = [
     "CountMinSketch",
     "HyperLogLog",
     "ExponentialHistogram",
+    "SpaceSaving",
     "TDigest",
 ]
