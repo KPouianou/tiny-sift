@@ -727,37 +727,37 @@ class CountingBloomFilter(BloomFilter[T]):
     def _assess_overflow_risk(self) -> Dict[str, Any]:
         """
         Assess the risk of counter overflow based on current filter state.
-        
+
         This method estimates the likelihood of counters reaching their maximum value,
         which would prevent accurate deletion of items.
-        
+
         Returns:
             A dictionary with overflow risk metrics.
         """
         # Calculate the current average of non-zero counters
         counter_sum = 0
         non_zero_counters = 0
-        
+
         # Sample counters (analyze a subset for large filters)
         max_samples = 5000  # Limit sample size for performance
         sample_interval = max(1, self._bit_size // max_samples)
-        
+
         for i in range(0, self._bit_size, sample_interval):
             val = self._get_counter(i)
             if val > 0:
                 counter_sum += val
                 non_zero_counters += 1
-        
+
         avg_non_zero = counter_sum / non_zero_counters if non_zero_counters > 0 else 0
-        
+
         # Calculate metrics
         if self._counter_max > 0 and avg_non_zero > 0:
             # Ratio of average to max value
             fill_ratio = avg_non_zero / self._counter_max
-            
+
             # Estimated headroom (remaining capacity per counter)
             headroom = 1.0 - fill_ratio
-            
+
             # Estimate risk categories
             if fill_ratio < 0.1:
                 risk_category = "very_low"
@@ -769,14 +769,16 @@ class CountingBloomFilter(BloomFilter[T]):
                 risk_category = "high"
             else:
                 risk_category = "very_high"
-            
+
             # Calculate operations before expected saturation
             # Conservative estimate: assume operations affect counters uniformly
             # and every new operation affects the maximum value counter
             remaining_ops = (self._counter_max - avg_non_zero) * non_zero_counters
             # Scale by hash count since each operation affects multiple counters
-            remaining_ops = remaining_ops / self._hash_count if self._hash_count > 0 else 0
-            
+            remaining_ops = (
+                remaining_ops / self._hash_count if self._hash_count > 0 else 0
+            )
+
             risk = {
                 "avg_counter_value": avg_non_zero,
                 "max_counter_value": self._counter_max,
@@ -784,7 +786,7 @@ class CountingBloomFilter(BloomFilter[T]):
                 "headroom": headroom,
                 "risk_category": risk_category,
                 "estimated_remaining_operations": int(remaining_ops),
-                "recommendation": self._get_overflow_recommendation(fill_ratio)
+                "recommendation": self._get_overflow_recommendation(fill_ratio),
             }
         else:
             # Not enough data for assessment
@@ -792,9 +794,9 @@ class CountingBloomFilter(BloomFilter[T]):
                 "avg_counter_value": 0,
                 "fill_ratio": 0,
                 "risk_category": "unknown",  # Changed from "very_low" to "unknown" to match test
-                "note": "Insufficient data for overflow risk assessment"
+                "note": "Insufficient data for overflow risk assessment",
             }
-        
+
         return risk
 
     def _get_overflow_recommendation(self, fill_ratio: float) -> str:
@@ -961,31 +963,33 @@ class CountingBloomFilter(BloomFilter[T]):
     def _calculate_optimal_counter_bits(self) -> int:
         """
         Calculate the optimal number of bits per counter based on usage patterns.
-        
+
         This method analyzes current counter values to suggest whether the current
         counter size is appropriate.
-        
+
         Returns:
             The recommended number of bits per counter.
         """
         # Sample counters to estimate maximum value needed
         max_value = 0
-        
+
         # Sample counters (analyze a subset for large filters)
         max_samples = 5000
         sample_interval = max(1, self._bit_size // max_samples)
-        
+
         for i in range(0, self._bit_size, sample_interval):
             val = self._get_counter(i)
             max_value = max(max_value, val)
-        
+
         # If no data or empty filter, recommend default size (4 bits)
         if max_value == 0:
             return 4  # Changed from 2 to 4 to match test expectations
-        
+
         # Calculate bits needed to represent the maximum value
-        bits_needed = max(2, math.ceil(math.log2(max_value + 2)))  # +2 for safety margin
-        
+        bits_needed = max(
+            2, math.ceil(math.log2(max_value + 2))
+        )  # +2 for safety margin
+
         # Round to next standard size (2, 4, 8)
         if bits_needed <= 2:
             return 2
@@ -997,17 +1001,17 @@ class CountingBloomFilter(BloomFilter[T]):
     def analyze_performance(self) -> Dict[str, Any]:
         """
         Perform comprehensive performance analysis of the Counting Bloom Filter.
-        
+
         This method combines various metrics to provide an overall assessment
         of the filter's performance, efficiency, and accuracy.
-        
+
         Returns:
             A dictionary containing performance metrics and recommendations.
         """
         # Get basic stats instead of calling super().analyze_performance()
         stats = self.get_stats()
         error_info = self.error_bounds()
-        
+
         # Base analysis (similar structure to BloomFilter.analyze_performance but built from scratch)
         base_analysis = {
             "algorithm": "Bloom Filter (base)",
@@ -1015,21 +1019,29 @@ class CountingBloomFilter(BloomFilter[T]):
                 "bits_per_item": stats.get("bits_per_item", 0),
                 "total_bytes": self.estimate_size(),
                 "bit_array_bytes": len(self._bytes),
-                "optimal_bits_per_item": -math.log(self._false_positive_rate) / (math.log(2) ** 2) if self._false_positive_rate > 0 else 0
+                "optimal_bits_per_item": (
+                    -math.log(self._false_positive_rate) / (math.log(2) ** 2)
+                    if self._false_positive_rate > 0
+                    else 0
+                ),
             },
             "accuracy": {
                 "target_fpp": self._false_positive_rate,
                 "current_fpp": stats.get("current_fpp", 0),
                 "bit_size": self._bit_size,
-                "hash_count": self._hash_count
+                "hash_count": self._hash_count,
             },
             "saturation": {
                 "fill_ratio": stats.get("fill_ratio", 0),
-                "items_ratio": self._items_processed / self._expected_items if self._expected_items > 0 else 0
+                "items_ratio": (
+                    self._items_processed / self._expected_items
+                    if self._expected_items > 0
+                    else 0
+                ),
             },
-            "recommendations": []
+            "recommendations": [],
         }
-        
+
         # Add CBF-specific components
         cbf_analysis = {
             "algorithm": "Counting Bloom Filter",
@@ -1039,19 +1051,19 @@ class CountingBloomFilter(BloomFilter[T]):
                 "expected_items": self._expected_items,
                 "false_positive_rate": self._false_positive_rate,
                 "bit_size": self._bit_size,
-                "hash_count": self._hash_count
+                "hash_count": self._hash_count,
             },
             "operation_support": {
                 "addition": True,
                 "deletion": True,
                 "count_exact": False,  # CBF doesn't track exact counts, just supports deletion
                 "deletion_limitations": (
-                    "Deletion only guaranteed safe when counters are independent. " 
+                    "Deletion only guaranteed safe when counters are independent. "
                     "Collisions may cause false negatives after deletion."
-                )
-            }
+                ),
+            },
         }
-        
+
         # Add counter-specific metrics
         counter_stats = self._calculate_counter_stats()
         if counter_stats:
@@ -1059,26 +1071,30 @@ class CountingBloomFilter(BloomFilter[T]):
                 "avg_counter_value": counter_stats.get("avg_counter", 0),
                 "max_observed": counter_stats.get("max_observed", 0),
                 "zero_counter_percentage": counter_stats.get("zero_counter_pct", 0),
-                "saturated_counter_percentage": counter_stats.get("saturated_counter_pct", 0)
+                "saturated_counter_percentage": counter_stats.get(
+                    "saturated_counter_pct", 0
+                ),
             }
-        
+
         # Add deletion safety analysis
         deletion_safety = self._assess_deletion_safety()
         if "unsafe_deletion_risk" in deletion_safety:
             cbf_analysis["deletion_safety"] = {
                 "risk_level": deletion_safety.get("risk_category", "unknown"),
-                "unsafe_probability": deletion_safety.get("unsafe_deletion_risk", 0)
+                "unsafe_probability": deletion_safety.get("unsafe_deletion_risk", 0),
             }
-        
+
         # Add overflow risk assessment
         overflow_risk = self._assess_overflow_risk()
         if "risk_category" in overflow_risk:
             cbf_analysis["overflow_assessment"] = {
                 "risk_level": overflow_risk.get("risk_category", "unknown"),
                 "fill_ratio": overflow_risk.get("fill_ratio", 0),
-                "estimated_remaining_operations": overflow_risk.get("estimated_remaining_operations", 0)
+                "estimated_remaining_operations": overflow_risk.get(
+                    "estimated_remaining_operations", 0
+                ),
             }
-        
+
         # Add memory overhead analysis compared to standard BF
         if hasattr(self, "_memory_breakdown") and self._memory_breakdown:
             memory = self._memory_breakdown
@@ -1086,16 +1102,20 @@ class CountingBloomFilter(BloomFilter[T]):
                 "counter_bits": memory.get("counter_bits", self._counter_bits),
                 "overhead_ratio": memory.get("overhead_ratio", self._counter_bits),
                 "total_bytes": memory.get("estimated_total", self.estimate_size()),
-                "equivalent_bf_bytes": memory.get("counters_bytes_if_bits", (self._bit_size + 7) // 8),
-                "memory_increase_factor": memory.get("overhead_ratio", self._counter_bits)
+                "equivalent_bf_bytes": memory.get(
+                    "counters_bytes_if_bits", (self._bit_size + 7) // 8
+                ),
+                "memory_increase_factor": memory.get(
+                    "overhead_ratio", self._counter_bits
+                ),
             }
-        
+
         # Integrate the two analysis sections
         combined_analysis = {**base_analysis, **cbf_analysis}
-        
+
         # Update recommendations with CBF-specific advice
         recommendations = combined_analysis.get("recommendations", [])
-        
+
         # Add counter size recommendations
         optimal_bits = self._calculate_optimal_counter_bits()
         if optimal_bits > self._counter_bits:
@@ -1108,24 +1128,28 @@ class CountingBloomFilter(BloomFilter[T]):
                 f"Counter bits ({self._counter_bits}) may be larger than needed. "
                 f"Based on observed maximum values, {optimal_bits} bits per counter would be sufficient, saving memory."
             )
-        
+
         # Add deletion safety recommendations
-        if "deletion_safety" in cbf_analysis and cbf_analysis["deletion_safety"]["risk_level"] in ["high", "very_high"]:
+        if "deletion_safety" in cbf_analysis and cbf_analysis["deletion_safety"][
+            "risk_level"
+        ] in ["high", "very_high"]:
             recommendations.append(
                 f"High deletion risk detected ({cbf_analysis['deletion_safety']['unsafe_probability']:.1%} chance of false negatives). "
                 f"Consider migrating to a new filter with lower fill ratio for safer deletions."
             )
-        
+
         # Add overflow recommendations
-        if "overflow_assessment" in cbf_analysis and cbf_analysis["overflow_assessment"]["risk_level"] in ["high", "very_high"]:
+        if "overflow_assessment" in cbf_analysis and cbf_analysis[
+            "overflow_assessment"
+        ]["risk_level"] in ["high", "very_high"]:
             recommendations.append(
                 f"Counter overflow risk is {cbf_analysis['overflow_assessment']['risk_level']}. "
                 f"Estimated remaining operations before overflow: {cbf_analysis['overflow_assessment']['estimated_remaining_operations']}. "
                 f"Consider increasing counter bits or migrating to a fresh filter."
             )
-        
+
         combined_analysis["recommendations"] = recommendations
-        
+
         return combined_analysis
 
     def get_deletion_safety_report(self) -> Dict[str, Any]:
@@ -1193,18 +1217,22 @@ class CountingBloomFilter(BloomFilter[T]):
 
         return report
 
-    def get_optimal_parameters(self, error_rate: Optional[float] = None, items: Optional[int] = None,
-                          counter_bits: Optional[int] = None) -> Dict[str, Any]:
+    def get_optimal_parameters(
+        self,
+        error_rate: Optional[float] = None,
+        items: Optional[int] = None,
+        counter_bits: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Calculate optimal filter parameters based on desired properties.
-        
+
         This method calculates optimal parameters without relying on the base class.
-        
+
         Args:
             error_rate: Desired false positive rate
             items: Expected number of items
             counter_bits: Desired bits per counter (2, 4, or 8)
-            
+
         Returns:
             A dictionary with recommended parameters.
         """
@@ -1212,43 +1240,47 @@ class CountingBloomFilter(BloomFilter[T]):
         error_rate = error_rate if error_rate is not None else self._false_positive_rate
         items = items if items is not None else self._expected_items
         counter_bits = counter_bits if counter_bits is not None else self._counter_bits
-        
+
         # Validate inputs
         if not (0 < error_rate < 1) or items < 1:
-            return {"error": "Invalid parameters. Ensure 0 < error_rate < 1 and items >= 1"}
-        
+            return {
+                "error": "Invalid parameters. Ensure 0 < error_rate < 1 and items >= 1"
+            }
+
         # Validate counter bits
         if counter_bits not in self.SUPPORTED_COUNTER_BITS:
             counter_bits = 4  # Default to 4 if invalid
-        
+
         # Calculate optimal bit size
-        optimal_bit_size = int(math.ceil(-items * math.log(error_rate) / (math.log(2) ** 2)))
-        
+        optimal_bit_size = int(
+            math.ceil(-items * math.log(error_rate) / (math.log(2) ** 2))
+        )
+
         # Calculate optimal hash count
         optimal_hash_count = int(math.ceil((optimal_bit_size / items) * math.log(2)))
-        
+
         # Calculate memory requirements for CBF (bits × counter_bits)
         bits_needed = optimal_bit_size * counter_bits
         bytes_required = (bits_needed + 7) // 8
-        
+
         # Regular BF bytes for comparison
         bf_bytes_required = (optimal_bit_size + 7) // 8
-        
+
         # Calculate counter-specific parameters
         counter_max = (1 << counter_bits) - 1
-        
+
         # Compare with current parameters
         current_params = {
             "bit_size": self._bit_size,
             "hash_count": self._hash_count,
             "bytes": len(self._bytes),
             "counter_bits": self._counter_bits,
-            "counter_max": self._counter_max
+            "counter_max": self._counter_max,
         }
-        
+
         # Calculate memory overhead compared to standard BF
         memory_overhead = bytes_required / bf_bytes_required
-        
+
         recommendations = {
             # Base parameters
             "target_error_rate": error_rate,
@@ -1256,7 +1288,10 @@ class CountingBloomFilter(BloomFilter[T]):
             "optimal_bit_size": optimal_bit_size,
             "optimal_hash_count": optimal_hash_count,
             "optimal_bytes": bf_bytes_required,
-            "expected_fpp_at_capacity": (1 - math.exp(-optimal_hash_count * items / optimal_bit_size)) ** optimal_hash_count,
+            "expected_fpp_at_capacity": (
+                1 - math.exp(-optimal_hash_count * items / optimal_bit_size)
+            )
+            ** optimal_hash_count,
             # Add CBF-specific parameters
             "optimal_counter_bits": counter_bits,
             "optimal_counter_max": counter_max,
@@ -1265,7 +1300,9 @@ class CountingBloomFilter(BloomFilter[T]):
             "memory_overhead_ratio": memory_overhead,
             "current_params": current_params,
             "deletion_capability": True,
-            "recommended_operations_before_overflow": min(counter_max * optimal_bit_size // (optimal_hash_count * 2), items * 5)
+            "recommended_operations_before_overflow": min(
+                counter_max * optimal_bit_size // (optimal_hash_count * 2), items * 5
+            ),
         }
-        
+
         return recommendations

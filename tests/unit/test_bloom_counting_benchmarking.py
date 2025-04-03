@@ -153,62 +153,68 @@ class TestCountingBloomFilterBenchmarking(unittest.TestCase):
     def test_optimal_counter_bits_calculation(self):
         """Test calculation of optimal counter bits."""
         cbf = CountingBloomFilter(expected_items=100, counter_bits=4)
-        
+
         # Test with empty filter (should recommend 4 bits)
         self.assertEqual(cbf._calculate_optimal_counter_bits(), 4)
-        
+
         # Add items with small counts (1 per item)
         for i in range(50):
             cbf.update(f"item-{i}")
-            
+
         # Should still recommend 4 bits since counts are small
         self.assertEqual(cbf._calculate_optimal_counter_bits(), 4)
-        
+
         # Add same items multiple times to increase counter values
         for _ in range(3):
             for i in range(10):
                 cbf.update(f"item-{i}")
-                
+
         # Should continue recommending 4 bits based on observed values
         optimal_bits = cbf._calculate_optimal_counter_bits()
         self.assertGreaterEqual(optimal_bits, 4)
-        
+
         # Fill a counter to near max to test higher recommendations
         # Directly manipulate a counter for testing
         test_position = 0
         cbf._set_counter(test_position, 14)  # Near max for 4-bit (15)
-        
+
         # Should still recommend 4 bits (unless we set to a higher value)
         self.assertGreaterEqual(cbf._calculate_optimal_counter_bits(), 4)
 
     def test_assess_overflow_risk(self):
         """Test overflow risk assessment calculations."""
         cbf = CountingBloomFilter(expected_items=100, counter_bits=4)
-        
+
         # Empty filter should have unknown risk (not very_low)
         risk_empty = cbf._assess_overflow_risk()
         self.assertEqual(risk_empty["risk_category"], "unknown")
-        
+
         # Add items to increase counter values
         for i in range(10):
             for _ in range(5):  # Add each item 5 times
                 cbf.update(f"item-{i}")
-                
+
         # Risk should increase but still be moderate
         risk_moderate = cbf._assess_overflow_risk()
         self.assertGreater(risk_moderate["fill_ratio"], 0.0)
-        
+
         # Artificially create high-risk scenario by manipulating counters
         # Set a counter to max value
         test_position = 0
         max_val = cbf._counter_max
         cbf._set_counter(test_position, max_val)
-        
+
         risk_high = cbf._assess_overflow_risk()
         self.assertGreater(risk_high["fill_ratio"], risk_moderate["fill_ratio"])
-        
+
         # Recommendation should change as risk increases
-        self.assertNotEqual(risk_empty["recommendation"], risk_high["recommendation"]) if "recommendation" in risk_empty else True
+        (
+            self.assertNotEqual(
+                risk_empty["recommendation"], risk_high["recommendation"]
+            )
+            if "recommendation" in risk_empty
+            else True
+        )
 
     def test_assess_deletion_safety(self):
         """Test deletion safety assessment calculations."""
@@ -240,40 +246,40 @@ class TestCountingBloomFilterBenchmarking(unittest.TestCase):
     def test_analyze_performance(self):
         """Test comprehensive performance analysis method."""
         cbf = CountingBloomFilter(expected_items=100, counter_bits=4)
-        
+
         # Skip this test if analyze_performance() is not fixed yet
-        if not hasattr(cbf, 'analyze_performance'):
+        if not hasattr(cbf, "analyze_performance"):
             self.skipTest("analyze_performance() not implemented yet")
             return
-            
+
         try:
             # Test analysis on empty filter
             analysis_empty = cbf.analyze_performance()
-            
+
             # Check structure of analysis
             self.assertEqual(analysis_empty["algorithm"], "Counting Bloom Filter")
             self.assertIn("parameters", analysis_empty)
             self.assertIn("recommendations", analysis_empty)
             self.assertIn("operation_support", analysis_empty)
-            
+
             # Operation support section should mention deletion capability
             self.assertTrue(analysis_empty["operation_support"]["deletion"])
         except AttributeError:
             self.skipTest("analyze_performance() not implemented correctly")
-    
+
     def test_get_optimal_parameters(self):
         """Test optimal parameter calculation method."""
         cbf = CountingBloomFilter(expected_items=100, counter_bits=4)
-        
+
         # Skip this test if get_optimal_parameters() is not fixed yet
-        if not hasattr(cbf, 'get_optimal_parameters'):
+        if not hasattr(cbf, "get_optimal_parameters"):
             self.skipTest("get_optimal_parameters() not implemented yet")
             return
-            
+
         try:
             # Calculate optimal parameters with default settings
             params = cbf.get_optimal_parameters()
-            
+
             # Check structure
             self.assertIn("optimal_counter_bits", params)
             self.assertIn("optimal_counter_max", params)
@@ -471,32 +477,33 @@ class TestCountingBloomFilterBenchmarking(unittest.TestCase):
         """Test benchmarking hooks with edge cases."""
         # Test with minimum counter bits
         cbf_min = CountingBloomFilter(expected_items=10, counter_bits=2)
-        
+
         # Test with maximum counter bits
         cbf_max = CountingBloomFilter(expected_items=10, counter_bits=8)
-        
+
         # Test very small filter
         cbf_tiny = CountingBloomFilter(expected_items=1, counter_bits=4)
-        
+
         # Ensure hooks run without errors for edge cases
         for filter_instance in [cbf_min, cbf_max, cbf_tiny]:
             # Add an item to ensure non-empty state
             filter_instance.update("test")
-            
+
             # Run hooks that shouldn't cause errors
             try:
                 stats = filter_instance.get_stats()
                 bounds = filter_instance.error_bounds()
                 report = filter_instance.get_deletion_safety_report()
-                
+
                 # Skip analyze_performance() and get_optimal_parameters() if they're not fixed yet
-                
+
                 # Minimal validation
                 self.assertIsInstance(stats, dict)
                 self.assertIsInstance(bounds, dict)
                 self.assertIsInstance(report, dict)
             except Exception as e:
                 self.fail(f"Hooks raised exception on edge case: {str(e)}")
+
 
 if __name__ == "__main__":
     unittest.main()
