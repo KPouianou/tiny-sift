@@ -112,7 +112,7 @@ class BloomFilter(StreamSummary[T, bool]):
         self._approximate_count = 0
 
         # Storage for memory breakdown (used by estimate_size)
-        self._memory_breakdown = None
+        self._memory_breakdown = {}
 
     def _calculate_bit_size(self, n: int, p: float) -> int:
         """

@@ -59,8 +59,7 @@ class TestBloomFilterBenchmarkingAdvanced(unittest.TestCase):
             memory_usages.append(bf.estimate_size())
 
         # Memory usage should scale with expected items, but not necessarily linearly
-        # due to fixed overhead in the object itself
-
+        # due to fixed overhead in the object itself.
         # For small to medium sizes, check that memory increases meaningfully
         small_to_medium_ratio = memory_usages[1] / memory_usages[0]
         self.assertGreater(
@@ -83,7 +82,7 @@ class TestBloomFilterBenchmarkingAdvanced(unittest.TestCase):
 
         # Verify breakdown details
         bf = BloomFilter(expected_items=1000, false_positive_rate=0.01)
-        self.assertTrue(hasattr(bf, "_memory_breakdown"))
+        bf.estimate_size()
 
         # Breakdown should include key components
         breakdown = bf._memory_breakdown
@@ -197,18 +196,20 @@ class TestBloomFilterBenchmarkingAdvanced(unittest.TestCase):
             params_high_error["optimal_bit_size"], 2000
         )  # Should be relatively small
 
-        # Test with very high item count
-        params_high_items = bf.get_optimal_parameters(error_rate=0.01, items=1000000)
+        # Test with very high item count - KEEP THE SAME ERROR RATE FOR SCALING TEST
+        params_high_items = bf.get_optimal_parameters(
+            error_rate=0.0001, items=1000000
+        )  # Use same error rate
 
-        # For high item counts, should scale roughly linearly
+        # For high item counts, should scale roughly linearly with constant p
         size_ratio = 1000000 / 1000  # 1000x more items
         bit_size_ratio = (
             params_high_items["optimal_bit_size"] / params_low_error["optimal_bit_size"]
         )
 
-        # Allow some margin in the scaling relationship
-        self.assertGreater(bit_size_ratio, size_ratio * 0.8)
-        self.assertLess(bit_size_ratio, size_ratio * 1.2)
+        # Allow some margin in the scaling relationship. The scaling should be very close to linear
+        self.assertGreater(bit_size_ratio, size_ratio * 0.98)  # Expect close to 1000x
+        self.assertLess(bit_size_ratio, size_ratio * 1.02)  # Expect close to 1000x
 
         # Compare memory requirements
         self.assertGreater(
