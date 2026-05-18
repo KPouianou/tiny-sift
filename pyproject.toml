@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -20,13 +20,13 @@ requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
-numpy = ["numpy>=1.20.0"]
+numpy = ["numpy>=1.26"]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=3.0.0",
-    "black>=22.0.0",
-    "isort>=5.10.0",
-    "mypy>=0.910",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "black>=24.0",
+    "isort>=5.13",
+    "mypy>=1.10",
 ]
 
 [tool.black]
